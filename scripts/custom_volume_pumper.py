@@ -1,11 +1,9 @@
 from decimal import Decimal
 import math
 import time
-from typing import List
 from hummingbot.connector.utils import split_hb_trading_pair
 from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
 from hummingbot.core.data_type.order_candidate import OrderCandidate
-from hummingbot.core.utils.estimate_fee import build_trade_fee
 from hummingbot.strategy.script_strategy_base import ScriptStrategyBase
 from random import randint
 
@@ -17,7 +15,6 @@ class CustomVolumePumpr(ScriptStrategyBase):
     order_lower_amount = 100  # in base (GGEZ1)
     order_upper_amount = 300
     price_source = PriceType.MidPrice
-    mid_spread_ticks = Decimal("0.0001")
     last_trade_price = 0
     delay_order_time = 20  # seconds
     last_mid_price_timestamp = time.time()
@@ -142,7 +139,7 @@ class CustomVolumePumpr(ScriptStrategyBase):
         best_ask_price = self.connector.get_price(self.trading_pair, True)
         best_bid_price = self.connector.get_price(self.trading_pair, False)
         mid_price = self.connector.get_mid_price(self.trading_pair)
-        order_price = Decimal((best_ask_price + mid_price) / 2)
+        order_price = Decimal((best_ask_price + mid_price) / 2) + randint(0, 99) * self.tick_size
         return best_ask_price, best_bid_price, order_price
 
     def adjust_proposal_to_budget(self, proposal: OrderCandidate) -> OrderCandidate:
