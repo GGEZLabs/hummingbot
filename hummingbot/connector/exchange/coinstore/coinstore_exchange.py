@@ -243,6 +243,8 @@ class CoinstoreExchange(ExchangePyBase):
             cancel_result = await self._api_post(
                 path_url=CONSTANTS.REST_CANCEL_BATCH_ORDERS, data=api_params, is_auth_required=True
             )
+            if cancel_result["code"] != CONSTANTS.API_SUCCESS_CODE:
+                continue
             cancel_result_data = cancel_result["data"]
             # this ID is exchange order ID
             successful_cancellations.extend([CancellationResult(id, True) for id in cancel_result_data["success"]])
@@ -389,8 +391,9 @@ class CoinstoreExchange(ExchangePyBase):
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
+                        percent=Decimal(trade["acturalFeeRate"]),
                         percent_token=trade["acturalFeeRate"],
-                        flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=trade["acturalFeeRate"])],
+                        flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=trade[order.base_asset])],
                     )
                     price = Decimal(trade["execAmt"]) / Decimal(trade["execQty"])
                     trade_update = TradeUpdate(

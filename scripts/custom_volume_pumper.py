@@ -1,0 +1,170 @@
+from decimal import Decimal
+import math
+import time
+from typing import List
+from hummingbot.connector.utils import split_hb_trading_pair
+from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
+from hummingbot.core.data_type.order_candidate import OrderCandidate
+from hummingbot.core.utils.estimate_fee import build_trade_fee
+from hummingbot.strategy.script_strategy_base import ScriptStrategyBase
+from random import randint
+
+
+class CustomVolumePumpr(ScriptStrategyBase):
+    # Settings / Inputs
+    exchange: str = "coinstore"
+    trading_pair: str = "GGEZ1-USDT"
+    order_lower_amount = 100  # in base (GGEZ1)
+    order_upper_amount = 300
+    price_source = PriceType.MidPrice
+    mid_spread_ticks = Decimal("0.0001")
+    last_trade_price = 0
+    delay_order_time = 20  # seconds
+    last_mid_price_timestamp = time.time()
+
+    markets = {exchange: {trading_pair}}
+    status: str = "NOT_INITIALIZED"
+
+    @property
+    def connector(self):
+        return self.connectors[self.exchange]
+
+    def on_tick(self):
+        if self.status == "NOT_INITIALIZED":
+            self.init_strategy()
+
+        #  cancel all orders active orders
+        self.cancel_all_orders()
+
+        # calculate order price
+        best_ask_price = self.connector.get_price(self.trading_pair, True)
+        best_bid_price = self.connector.get_price(self.trading_pair, False)
+        mid_price = self.connector.get_mid_price(self.trading_pair)
+        order_price = Decimal((best_ask_price + mid_price) / 2)
+
+        # check if last trade price has changed
+        order_book = self.connector.get_order_book(self.trading_pair)
+        last_trade_price_new = order_book.last_trade_price
+        if last_trade_price_new != self.last_trade_price:
+            # if last trade price has changed, update last trade price and timestamp
+            self.last_trade_price = last_trade_price_new
+            self.logger().info(f"Last trade price: {self.last_trade_price}")
+            self.last_mid_price_timestamp = time.time()
+            return
+
+        # check if last mid price timestamp is less than delay order time
+        if time.time() - self.last_mid_price_timestamp < self.delay_order_time:
+            return
+
+        # TODO get last trade time
+
+        # check if order price is within spread
+        if order_price < best_ask_price and order_price > best_bid_price:
+            # generate random order amount
+            order_amount = randint(self.order_lower_amount, self.order_upper_amount)  # in base (GGEZ1)
+
+            # check if we have enough balance to place order
+            balance = self.get_balance_df()
+            quote_balance = Decimal(
+                balance.loc[
+                    (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.quote), "Available Balance"
+                ].iloc[0]
+            )
+            base_balance = Decimal(
+                balance.loc[
+                    (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.base), "Available Balance"
+                ].iloc[0]
+            )
+
+            if quote_balance < order_amount * order_price:
+                order_amount = math.floor(quote_balance / order_price)
+
+            if base_balance < order_amount:
+                order_amount = base_balance
+
+            # create order proposals and place them
+            # TODO adjust proposal to budget
+            sell_order_proposal = OrderCandidate(
+                trading_pair=self.trading_pair,
+                is_maker=True,
+                order_type=OrderType.LIMIT,
+                order_side=TradeType.SELL,
+                amount=Decimal(order_amount),
+                price=order_price,
+            )
+            self.place_order(self.exchange, sell_order_proposal)
+
+            buy_order_proposal = OrderCandidate(
+                trading_pair=self.trading_pair,
+                is_maker=True,
+                order_type=OrderType.LIMIT,
+                order_side=TradeType.BUY,
+                amount=Decimal(order_amount),
+                price=order_price,
+            )
+
+            self.place_order(self.exchange, buy_order_proposal)
+            # update last mid price timestamp
+            self.last_mid_price_timestamp = time.time()
+
+    def init_strategy(self):
+        """
+        Initialize strategy
+        - Query and set tick price (price quantum)
+        - Query and set taker & maker fees for specific trading pair (just fetches
+          it now, because it looks like HB just reads it from defaults instead of querying the exchange)
+        """
+        self.logger().info("Initializing strategy...")
+        best_bid_price = self.connector.get_mid_price(self.trading_pair)
+        self.tick_size = self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
+        self.logger().info(f"Tick size for {self.trading_pair} on {self.exchange}: {self.tick_size}")
+        self.base, self.quote = split_hb_trading_pair(self.trading_pair)
+        maker_fee = build_trade_fee(
+            self.exchange,
+            True,
+            self.base,
+            self.quote,
+            self.connector.get_maker_order_type(),
+            TradeType.BUY,
+            self.order_lower_amount,
+        )
+        taker_fee = build_trade_fee(
+            self.exchange,
+            True,
+            self.base,
+            self.quote,
+            self.connector.get_taker_order_type(),
+            TradeType.BUY,
+            self.order_lower_amount,
+        )
+        self.logger().info(f"Maker fee according to HB: {maker_fee}")
+        self.logger().info(f"Taker fee according to HB: {taker_fee}")
+        self.status = "RUNNING"
+
+    def place_order(self, connector_name: str, order: OrderCandidate):
+        if order.order_side == TradeType.SELL:
+            self.sell(
+                connector_name=connector_name,
+                trading_pair=order.trading_pair,
+                amount=order.amount,
+                order_type=order.order_type,
+                price=order.price,
+            )
+        if order.order_side == TradeType.BUY:
+            self.buy(
+                connector_name=connector_name,
+                trading_pair=order.trading_pair,
+                amount=order.amount,
+                order_type=order.order_type,
+                price=order.price,
+            )
+            pass
+
+    def adjust_proposal_to_budget(self, proposal: OrderCandidate) -> OrderCandidate:
+        proposal_adjusted = self.connector.budget_checker.adjust_candidate(proposal, all_or_none=True)
+        return proposal_adjusted
+
+    def cancel_all_orders(self):
+        active_orders = self.get_active_orders(connector_name=self.exchange)
+        for order in active_orders:
+            self.cancel(self.exchange, order.trading_pair, order.client_order_id)
