@@ -36,11 +36,12 @@ class CustomVolumePumpr(ScriptStrategyBase):
         #  cancel all orders active orders
         self.cancel_all_orders()
 
+        # check if last mid price timestamp is less than delay order time
+        if time.time() - self.last_mid_price_timestamp < self.delay_order_time:
+            return
+
         # calculate order price
-        best_ask_price = self.connector.get_price(self.trading_pair, True)
-        best_bid_price = self.connector.get_price(self.trading_pair, False)
-        mid_price = self.connector.get_mid_price(self.trading_pair)
-        order_price = Decimal((best_ask_price + mid_price) / 2)
+        best_ask_price, best_bid_price, order_price = self.calculate_order_price()
 
         # check if last trade price has changed
         order_book = self.connector.get_order_book(self.trading_pair)
@@ -52,10 +53,6 @@ class CustomVolumePumpr(ScriptStrategyBase):
             self.last_mid_price_timestamp = time.time()
             return
 
-        # check if last mid price timestamp is less than delay order time
-        if time.time() - self.last_mid_price_timestamp < self.delay_order_time:
-            return
-
         # TODO get last trade time
 
         # check if order price is within spread
@@ -64,46 +61,16 @@ class CustomVolumePumpr(ScriptStrategyBase):
             order_amount = randint(self.order_lower_amount, self.order_upper_amount)  # in base (GGEZ1)
 
             # check if we have enough balance to place order
-            balance = self.get_balance_df()
-            quote_balance = Decimal(
-                balance.loc[
-                    (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.quote), "Available Balance"
-                ].iloc[0]
-            )
-            base_balance = Decimal(
-                balance.loc[
-                    (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.base), "Available Balance"
-                ].iloc[0]
-            )
-
-            if quote_balance < order_amount * order_price:
-                order_amount = math.floor(quote_balance / order_price)
-
-            if base_balance < order_amount:
-                order_amount = base_balance
+            order_amount = self.adjust_order_amount_for_balance(order_price, order_amount)
 
             # create order proposals and place them
             # TODO adjust proposal to budget
-            sell_order_proposal = OrderCandidate(
-                trading_pair=self.trading_pair,
-                is_maker=True,
-                order_type=OrderType.LIMIT,
-                order_side=TradeType.SELL,
-                amount=Decimal(order_amount),
-                price=order_price,
-            )
+            sell_order_proposal = self.generate_order_candidate(order_price, order_amount, False)
             self.place_order(self.exchange, sell_order_proposal)
 
-            buy_order_proposal = OrderCandidate(
-                trading_pair=self.trading_pair,
-                is_maker=True,
-                order_type=OrderType.LIMIT,
-                order_side=TradeType.BUY,
-                amount=Decimal(order_amount),
-                price=order_price,
-            )
-
+            buy_order_proposal = self.generate_order_candidate(order_price, order_amount, True)
             self.place_order(self.exchange, buy_order_proposal)
+
             # update last mid price timestamp
             self.last_mid_price_timestamp = time.time()
 
@@ -119,26 +86,6 @@ class CustomVolumePumpr(ScriptStrategyBase):
         self.tick_size = self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
         self.logger().info(f"Tick size for {self.trading_pair} on {self.exchange}: {self.tick_size}")
         self.base, self.quote = split_hb_trading_pair(self.trading_pair)
-        maker_fee = build_trade_fee(
-            self.exchange,
-            True,
-            self.base,
-            self.quote,
-            self.connector.get_maker_order_type(),
-            TradeType.BUY,
-            self.order_lower_amount,
-        )
-        taker_fee = build_trade_fee(
-            self.exchange,
-            True,
-            self.base,
-            self.quote,
-            self.connector.get_taker_order_type(),
-            TradeType.BUY,
-            self.order_lower_amount,
-        )
-        self.logger().info(f"Maker fee according to HB: {maker_fee}")
-        self.logger().info(f"Taker fee according to HB: {taker_fee}")
         self.status = "RUNNING"
 
     def place_order(self, connector_name: str, order: OrderCandidate):
@@ -158,7 +105,45 @@ class CustomVolumePumpr(ScriptStrategyBase):
                 order_type=order.order_type,
                 price=order.price,
             )
-            pass
+
+    def generate_order_candidate(self, order_price, order_amount, is_buy=True):
+        buy_order_proposal = OrderCandidate(
+            trading_pair=self.trading_pair,
+            is_maker=True,
+            order_type=OrderType.LIMIT,
+            order_side=TradeType.BUY if is_buy else TradeType.SELL,
+            amount=Decimal(order_amount),
+            price=order_price,
+        )
+
+        return buy_order_proposal
+
+    def adjust_order_amount_for_balance(self, order_price, order_amount):
+        balance = self.get_balance_df()
+        quote_balance = Decimal(
+            balance.loc[
+                (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.quote), "Available Balance"
+            ].iloc[0]
+        )
+        base_balance = Decimal(
+            balance.loc[
+                (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.base), "Available Balance"
+            ].iloc[0]
+        )
+
+        if quote_balance < order_amount * order_price:
+            order_amount = math.floor(quote_balance / order_price)
+
+        if base_balance < order_amount:
+            order_amount = base_balance
+        return order_amount
+
+    def calculate_order_price(self):
+        best_ask_price = self.connector.get_price(self.trading_pair, True)
+        best_bid_price = self.connector.get_price(self.trading_pair, False)
+        mid_price = self.connector.get_mid_price(self.trading_pair)
+        order_price = Decimal((best_ask_price + mid_price) / 2)
+        return best_ask_price, best_bid_price, order_price
 
     def adjust_proposal_to_budget(self, proposal: OrderCandidate) -> OrderCandidate:
         proposal_adjusted = self.connector.budget_checker.adjust_candidate(proposal, all_or_none=True)
@@ -167,4 +152,7 @@ class CustomVolumePumpr(ScriptStrategyBase):
     def cancel_all_orders(self):
         active_orders = self.get_active_orders(connector_name=self.exchange)
         for order in active_orders:
+            # time_now = time.time()
+            # cancel_when = (order.creation_timestamp * 1e-6) + 5
+            # if cancel_when < time_now:
             self.cancel(self.exchange, order.trading_pair, order.client_order_id)

@@ -209,17 +209,23 @@ class CoinstoreExchange(ExchangePyBase):
             print(e)
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
-        try:
-            api_params = {
-                "symbol": await self.exchange_symbol_associated_to_pair(tracked_order.trading_pair),
-                "ordId": tracked_order.exchange_order_id,
-            }
-            cancel_result = await self._api_post(
-                path_url=CONSTANTS.REST_CANCEL_ORDER, data=api_params, is_auth_required=True
-            )
-            return cancel_result["code"] == CONSTANTS.API_SUCCESS_CODE
-        except Exception as e:
-            print(e)
+        api_params = {
+            "symbol": await self.exchange_symbol_associated_to_pair(tracked_order.trading_pair),
+        }
+        if tracked_order.exchange_order_id is not None:
+            api_params["ordId"] = tracked_order.exchange_order_id
+        else:
+            api_params["clOrdId"] = order_id
+
+        cancel_result = await self._api_post(
+            path_url=CONSTANTS.REST_CANCEL_ORDER, data=api_params, is_auth_required=True
+        )
+        if cancel_result["code"] != CONSTANTS.API_SUCCESS_CODE:
+            return False
+        if cancel_result["data"]["state"] != CONSTANTS.OrderState.CANCELED.name:
+            return False
+        return True
+
 
     async def cancel_all(self, timeout_seconds: float) -> List[CancellationResult]:
         """
