@@ -487,7 +487,7 @@ class CoinstoreExchange(ExchangePyBase):
     async def _get_last_traded_price(self, trading_pair: str) -> float:
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
         end_point = f"{CONSTANTS.TICKER_PRICE_PATH_URL};symbol={symbol.upper()}"
-        resp_json = await self._api_request(method=RESTMethod.GET, path_url=end_point)
+        resp_json = await self._api_get(path_url=end_point)
         ticker_data = resp_json["data"][0]
         return float(ticker_data["price"])
 

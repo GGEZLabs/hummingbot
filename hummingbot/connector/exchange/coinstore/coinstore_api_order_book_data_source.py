@@ -62,20 +62,27 @@ class CoinstoreAPIOrderBookDataSource(OrderBookTrackerDataSource):
         :param ws: the websocket assistant used to connect to the exchange
         """
         try:
-            trade_params = []
-            depth_params = []
-            for trading_pair in self._trading_pairs:
-                symbol = await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-                trade_params.append(f"{symbol.lower()}@trade")
-                depth_params.append(f"{symbol.lower()}@depth@20")
-            payload = {"op": "SUB", "channel": trade_params, "id": 1}
-            subscribe_trade_request: WSJSONRequest = WSJSONRequest(payload=payload)
+            symbols = [
+                await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+                for trading_pair in self._trading_pairs
+            ]
 
-            payload = {"op": "SUB", "channel": depth_params, "id": 2}
-            subscribe_orderbook_request: WSJSONRequest = WSJSONRequest(payload=payload)
+            order_book_subscribe_payload = {
+                "op": "SUB",
+                "channel": [f"{symbol.lower()}@{CONSTANTS.DEPTH_EVENT_TYPE}" for symbol in symbols],
+                "id": 1,
+            }
+            trade_subscribe_payload = {
+                "op": "SUB",
+                "channel": [f"{symbol.lower()}@{CONSTANTS.TRADE_EVENT_TYPE}" for symbol in symbols],
+                "param": {"size": 1},
+                "id": 2,
+            }
 
-            await ws.send(subscribe_trade_request)
-            await ws.send(subscribe_orderbook_request)
+            order_book_subscribe_request: WSJSONRequest = WSJSONRequest(payload=order_book_subscribe_payload)
+            trade_subscribe_request: WSJSONRequest = WSJSONRequest(payload=trade_subscribe_payload)
+            await ws.send(order_book_subscribe_request)
+            await ws.send(trade_subscribe_request)
 
             self.logger().info("Subscribed to public order book and trade channels...")
         except asyncio.CancelledError:
@@ -110,26 +117,17 @@ class CoinstoreAPIOrderBookDataSource(OrderBookTrackerDataSource):
         return snapshot_msg
 
     async def _parse_trade_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
-        try:
-            if "data" not in raw_message:
-                trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-                    symbol=raw_message["symbol"]
-                )
-                trade_message = CoinstoreOrderBook.trade_message_from_exchange(
-                    raw_message, {"trading_pair": trading_pair}
-                )
+        if "data" not in raw_message:
+            trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
+                symbol=raw_message["symbol"]
+            )
+            trade_message = CoinstoreOrderBook.trade_message_from_exchange(raw_message, {"trading_pair": trading_pair})
+            message_queue.put_nowait(trade_message)
+        else:
+            for trade in raw_message["data"]:
+                trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(symbol=trade["symbol"])
+                trade_message = CoinstoreOrderBook.trade_message_from_exchange(trade, {"trading_pair": trading_pair})
                 message_queue.put_nowait(trade_message)
-            else:
-                for trade in raw_message["data"]:
-                    trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-                        symbol=trade["symbol"]
-                    )
-                    trade_message = CoinstoreOrderBook.trade_message_from_exchange(
-                        trade, {"trading_pair": trading_pair}
-                    )
-                    message_queue.put_nowait(trade_message)
-        except Exception as e:
-            print(e)
 
     async def _parse_order_book_diff_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
         # if "result" not in raw_message:
@@ -163,14 +161,14 @@ class CoinstoreAPIOrderBookDataSource(OrderBookTrackerDataSource):
         channel = ""
         if "result" not in event_message:
             event_type = event_message.get("T")
-            if event_type == "trade":
+            if event_type == CONSTANTS.TRADE_EVENT_TYPE:
                 channel = self._trade_messages_queue_key
-            elif event_type == "depth":
+            elif event_type == CONSTANTS.DEPTH_EVENT_TYPE:
                 channel = self._diff_messages_queue_key
         return channel
 
     def _get_messages_queue_keys(self) -> List[str]:
-        return ["depth", "trade"]
+        return [CONSTANTS.DEPTH_EVENT_TYPE, CONSTANTS.TRADE_EVENT_TYPE]
 
     async def listen_for_order_book_snapshots(self, ev_loop: asyncio.AbstractEventLoop, output: asyncio.Queue):
         """

@@ -43,11 +43,9 @@ POST = "POST"
 DELETE = "DELETE"
 
 # Websocket event types
+DEPTH_EVENT_TYPE = "depth"
 TRADE_EVENT_TYPE = "trade"
-SNAPSHOT_EVENT_TYPE = "depth"
-# Websocket event types
 DIFF_EVENT_TYPE = "depth"
-TRADE_EVENT_TYPE = "trade"
 
 TAKER_SIDE_BUY = "BUY"
 TAKER_SIDE_SELL = "SELL"

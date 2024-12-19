@@ -37,7 +37,7 @@ def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
     #         break
 
     # return is_trading and is_spot
-    return is_trading 
+    return is_trading
 
 
 class CoinstoreConfigMap(BaseConnectorConfigMap):
@@ -66,3 +66,36 @@ class CoinstoreConfigMap(BaseConnectorConfigMap):
 
 
 KEYS = CoinstoreConfigMap.construct()
+
+OTHER_DOMAINS = ["coinstore_2"]
+OTHER_DOMAINS_PARAMETER = {"coinstore_2": "us"}
+OTHER_DOMAINS_EXAMPLE_PAIR = {"coinstore_2": "BTC-USDT"}
+OTHER_DOMAINS_DEFAULT_FEES = {"coinstore_2": DEFAULT_FEES}
+
+
+class CoinstoreUSConfigMap(BaseConnectorConfigMap):
+    connector: str = Field(default="coinstore_2", const=True, client_data=None)
+    coinstore_api_key: SecretStr = Field(
+        default=...,
+        client_data=ClientFieldData(
+            prompt=lambda cm: "Enter your Coinstore US API key",
+            is_secure=True,
+            is_connect_key=True,
+            prompt_on_new=True,
+        ),
+    )
+    coinstore_api_secret: SecretStr = Field(
+        default=...,
+        client_data=ClientFieldData(
+            prompt=lambda cm: "Enter your Coinstore US API secret",
+            is_secure=True,
+            is_connect_key=True,
+            prompt_on_new=True,
+        ),
+    )
+
+    class Config:
+        title = "coinstore_2"
+
+
+OTHER_DOMAINS_KEYS = {"coinstore_2": CoinstoreUSConfigMap.construct()}
