@@ -16,7 +16,7 @@ class CustomVolumePumpr(ScriptStrategyBase):
     order_upper_amount = 300
     price_source = PriceType.MidPrice
     last_trade_price = 0
-    delay_order_time = 20  # seconds
+    delay_order_time = 120  # seconds
     last_mid_price_timestamp = time.time()
 
     markets = {exchange: {trading_pair}}
