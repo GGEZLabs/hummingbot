@@ -12,8 +12,8 @@ class CustomVolumePumpr(ScriptStrategyBase):
     # Settings / Inputs
     exchange: str = "coinstore"
     trading_pair: str = "GGEZ1-USDT"
-    order_lower_amount = 100  # in base (GGEZ1)
-    order_upper_amount = 300
+    order_lower_amount = 500  # in base (GGEZ1)
+    order_upper_amount = 2000
     price_source = PriceType.MidPrice
     last_trade_price = 0
     delay_order_time = 120  # seconds
