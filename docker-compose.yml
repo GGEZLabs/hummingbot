@@ -26,8 +26,8 @@ services:
     stdin_open: true
     network_mode: host
     environment:
-      - CONFIG_PASSWORD=p71!ggez1nJgJ@Zs
-      - CONFIG_FILE_NAME=custom_volume_pumper.py
+      - CONFIG_PASSWORD=a
+    #   - CONFIG_FILE_NAME=custom_volume_pumper.py
     #    - SCRIPT_CONFIG=conf_simple_pmm_example.yaml
 
   # gateway:
