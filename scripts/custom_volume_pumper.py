@@ -1,26 +1,80 @@
-from decimal import Decimal
 import math
+import os
 import time
+from decimal import Decimal
+from random import randint
+from typing import Dict
+
+import pandas as pd
+from pydantic import Field
+
+from hummingbot.client.config.config_data_types import BaseClientModel, ClientFieldData
+from hummingbot.connector.connector_base import ConnectorBase
 from hummingbot.connector.utils import split_hb_trading_pair
 from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
 from hummingbot.core.data_type.order_candidate import OrderCandidate
 from hummingbot.strategy.script_strategy_base import ScriptStrategyBase
-from random import randint
 
 
-class CustomVolumePumpr(ScriptStrategyBase):
-    # Settings / Inputs
-    exchange: str = "coinstore"
-    trading_pair: str = "GGEZ1-USDT"
-    order_lower_amount = 500  # in base (GGEZ1)
-    order_upper_amount = 2000
-    price_source = PriceType.MidPrice
-    last_trade_price = 0
-    delay_order_time = 120  # seconds
-    last_mid_price_timestamp = time.time()
+class CustomVolumePumperConfig(BaseClientModel):
+    script_file_name: str = Field(default_factory=lambda: os.path.basename(__file__))
+    exchange: str = Field(
+        "coinstore",
+        client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Exchange where the bot will trade"),
+    )
+    trading_pair: str = Field(
+        "GGEZ1-USDT",
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "Trading pair in which the bot will place orders"
+        ),
+    )
+    order_lower_amount: int = Field(
+        500,
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "Lower value for order amount (in base asset)"
+        ),
+    )
+    order_upper_amount: int = Field(
+        2000,
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "Upper value for order amount (in base asset)"
+        ),
+    )
+    delay_order_time: int = Field(
+        120, client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Delay time between orders (in seconds)")
+    )
+    balance_loss_threshold: Decimal = Field(
+        0, client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Balance loss threshold (in quote asset)")
+    )
+    minimum_ask_bid_spread: Decimal = Field(
+        1,
+        client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "minimum ask bid spread (basis points)"),
+    )
 
-    markets = {exchange: {trading_pair}}
-    status: str = "NOT_INITIALIZED"
+
+# TODO minimum_ask_bid_spread change it to be in basis points                                   DONE
+# TODO add stop trading parameter to stop all trades whe reaching the  balance_loss_threshold   DONE
+# TODO check order book diff function in connector
+# TODO Add random order delay time delay_order_time + randint(0, 120)                           DONE
+
+
+class CustomVolumePumper(ScriptStrategyBase):
+    @classmethod
+    def init_markets(cls, config: CustomVolumePumperConfig):
+        cls.markets = {config.exchange: {config.trading_pair}}
+
+    def __init__(self, connectors: Dict[str, ConnectorBase], config: CustomVolumePumperConfig):
+        super().__init__(connectors)
+        self.exchange = config.exchange
+        self.trading_pair = config.trading_pair
+        self.order_lower_amount = config.order_lower_amount
+        self.order_upper_amount = config.order_upper_amount
+        self.delay_order_time = config.delay_order_time
+        self.balance_loss_threshold = config.balance_loss_threshold
+        self.minimum_ask_bid_spread = config.minimum_ask_bid_spread
+        self.price_source = PriceType.MidPrice
+        self.last_mid_price_timestamp = time.time()
+        self.status = "NOT_INITIALIZED"
 
     @property
     def connector(self):
@@ -30,8 +84,14 @@ class CustomVolumePumpr(ScriptStrategyBase):
         if self.status == "NOT_INITIALIZED":
             self.init_strategy()
 
+        if self.status == "STOPPED":
+            return
+
         #  cancel all orders active orders
         self.cancel_all_orders()
+
+        # risk management
+        self.stop_loss_when_balance_below_threshold()
 
         # check if last mid price timestamp is less than delay order time
         if time.time() - self.last_mid_price_timestamp < self.delay_order_time:
@@ -40,6 +100,13 @@ class CustomVolumePumpr(ScriptStrategyBase):
         # calculate order price
         best_ask_price, best_bid_price, order_price = self.calculate_order_price()
 
+        # check if spread is too low
+        bid_ask_spread = best_ask_price - best_bid_price
+        if bid_ask_spread < self.covert_from_basis_point(self.minimum_ask_bid_spread):
+            self.logger().notify(f"Spread too low: {bid_ask_spread}")
+            self.start_orders_delay()
+            return
+
         # check if last trade price has changed
         order_book = self.connector.get_order_book(self.trading_pair)
         last_trade_price_new = order_book.last_trade_price
@@ -47,7 +114,7 @@ class CustomVolumePumpr(ScriptStrategyBase):
             # if last trade price has changed, update last trade price and timestamp
             self.last_trade_price = last_trade_price_new
             self.logger().info(f"Last trade price: {self.last_trade_price}")
-            self.last_mid_price_timestamp = time.time()
+            self.start_orders_delay()
             return
 
         # TODO get last trade time
@@ -68,8 +135,8 @@ class CustomVolumePumpr(ScriptStrategyBase):
             buy_order_proposal = self.generate_order_candidate(order_price, order_amount, True)
             self.place_order(self.exchange, buy_order_proposal)
 
-            # update last mid price timestamp
-            self.last_mid_price_timestamp = time.time()
+        # update last mid price timestamp
+        self.start_orders_delay()
 
     def init_strategy(self):
         """
@@ -83,7 +150,12 @@ class CustomVolumePumpr(ScriptStrategyBase):
         self.tick_size = self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
         self.logger().info(f"Tick size for {self.trading_pair} on {self.exchange}: {self.tick_size}")
         self.base, self.quote = split_hb_trading_pair(self.trading_pair)
+        self.last_trade_price = self.connector.get_order_book(self.trading_pair).last_trade_price
+        self.starting_balance = self.get_balance_df()
         self.status = "RUNNING"
+
+    def covert_from_basis_point(self, basis_point):
+        return basis_point / 10000
 
     def place_order(self, connector_name: str, order: OrderCandidate):
         if order.order_side == TradeType.SELL:
@@ -153,3 +225,77 @@ class CustomVolumePumpr(ScriptStrategyBase):
             # cancel_when = (order.creation_timestamp * 1e-6) + 5
             # if cancel_when < time_now:
             self.cancel(self.exchange, order.trading_pair, order.client_order_id)
+
+    def start_orders_delay(self):
+        self.last_mid_price_timestamp = time.time() + randint(0, 120)
+
+    def stop_loss_when_balance_below_threshold(self):
+        quote_threshold, base_threshold = self.calculate_quote_base_balance_threshold()
+
+        balance_differences_df = self.get_balance_differences_df()
+
+        base_condition, quote_condition = self.check_thresholds(balance_differences_df, base_threshold, quote_threshold)
+
+        if base_condition or quote_condition:
+            notification = "\nWARNING : Balance below threshold."
+            if base_condition:
+                base_balance = balance_differences_df.loc[
+                    balance_differences_df["Asset"] == self.base, "Current_Balance"
+                ].iloc[0]
+                notification += "\nBase Asset getting below threshold"
+                notification += f"\nCurrent Base Balance: {str(base_balance)}"
+            if quote_condition:
+                quote_balance = balance_differences_df.loc[
+                    balance_differences_df["Asset"] == self.quote, "Current_Balance"
+                ].iloc[0]
+                notification += "\nQuote Asset getting below threshold"
+                notification += f"\nCurrent Quote Balance: {str(quote_balance)}"
+
+            self.logger().notify(notification)
+            self.cancel_all_orders()
+            self.logger().notify("\nNotification : Stopping strategy initiated.\nCanceling all orders")
+            self.status = "STOPPED"
+
+    def calculate_quote_base_balance_threshold(self):
+        quote_threshold = self.balance_loss_threshold
+        mid_price = self.connector.get_mid_price(self.trading_pair)
+        base_threshold = quote_threshold / mid_price
+        return quote_threshold, base_threshold
+
+    def get_balance_differences_df(self):
+        current_balance = self.get_balance_df()
+        starting_balance = self.starting_balance
+        balance_differences_df = pd.DataFrame(
+            {
+                "Exchange": starting_balance["Exchange"],
+                "Asset": starting_balance["Asset"],
+                "Starting_Available_Balance": starting_balance["Available Balance"],
+                "Starting_Balance": starting_balance["Total Balance"],
+                "Current_Available_Balance": current_balance["Available Balance"],
+                "Current_Balance": current_balance["Total Balance"],
+            }
+        )
+        balance_differences_df["Difference_Balance"] = (
+            balance_differences_df["Current_Balance"] - balance_differences_df["Starting_Balance"]
+        )
+        balance_differences_df["Difference_Available_Balance"] = (
+            balance_differences_df["Current_Available_Balance"] - balance_differences_df["Starting_Available_Balance"]
+        )
+        return balance_differences_df
+
+    def is_balance_below_threshold(self, balance_df, asset, threshold):
+        difference_balance = Decimal(abs(balance_df.loc[balance_df["Asset"] == asset, "Difference_Balance"].iloc[0]))
+        difference_available_balance = Decimal(
+            abs(balance_df.loc[balance_df["Asset"] == asset, "Difference_Available_Balance"].iloc[0])
+        )
+        return difference_balance > threshold or difference_available_balance > threshold
+
+    def check_thresholds(self, balance_df, base_threshold, quote_threshold):
+        base_condition = self.is_balance_below_threshold(balance_df, self.base, base_threshold)
+        quote_condition = self.is_balance_below_threshold(balance_df, self.quote, quote_threshold)
+        return base_condition, quote_condition
+
+    def on_stop(self):
+        self.cancel_all_orders()
+        self.logger().notify("Notification : Stopping strategy initiated.\nCanceling all orders")
+        return super().on_stop()
