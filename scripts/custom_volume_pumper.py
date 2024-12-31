@@ -74,6 +74,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.minimum_ask_bid_spread = config.minimum_ask_bid_spread
         self.price_source = PriceType.MidPrice
         self.last_mid_price_timestamp = time.time()
+        self.random_delay = 0
         self.status = "NOT_INITIALIZED"
 
     @property
@@ -94,7 +95,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.stop_loss_when_balance_below_threshold()
 
         # check if last mid price timestamp is less than delay order time
-        if time.time() - self.last_mid_price_timestamp < self.delay_order_time:
+        if time.time() - self.last_mid_price_timestamp < self.delay_order_time + self.random_delay:
             return
 
         # calculate order price
@@ -227,7 +228,8 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.cancel(self.exchange, order.trading_pair, order.client_order_id)
 
     def start_orders_delay(self):
-        self.last_mid_price_timestamp = time.time() + randint(0, 120)
+        self.random_delay = randint(0, 120)
+        self.last_mid_price_timestamp = time.time()
 
     def stop_loss_when_balance_below_threshold(self):
         quote_threshold, base_threshold = self.calculate_quote_base_balance_threshold()
