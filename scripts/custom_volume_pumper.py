@@ -135,6 +135,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
             buy_order_proposal = self.generate_order_candidate(order_price, order_amount, True)
             self.place_order(self.exchange, buy_order_proposal)
+            self.last_trade_price = order_price
 
         # update last mid price timestamp
         self.start_orders_delay()
