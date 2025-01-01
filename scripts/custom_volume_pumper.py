@@ -110,7 +110,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         if bid_ask_spread < self.covert_from_basis_point(self.minimum_ask_bid_spread):
             self.start_orders_delay()
             self.logger().notify(
-                f"\nNOTIFICATION : Tight Spread.\nSpread {bid_ask_spread}\nOrder placing is delayed by { round(time.time() - self.last_mid_price_timestamp + self.random_delay + self.delay_order_time) } seconds"
+                f"\nNOTIFICATION : Tight Spread.\nSpread {bid_ask_spread}\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
             )
             return
 
@@ -120,14 +120,13 @@ class CustomVolumePumper(ScriptStrategyBase):
         if last_trade_price_new != float(self.last_trade_price):
             # if last trade price has changed, update last trade price and timestamp
             self.last_trade_price = last_trade_price_new
-            self.logger().info(
-                f"\nNOTIFICATION : Last Traded Price Has Changed.\nLast trade price: {self.last_trade_price}\nOrder placing is delayed"
-            )
             self.start_orders_delay()
+            self.logger().info(
+                f"\nNOTIFICATION : Last Traded Price Has Changed.\nLast trade price: {self.last_trade_price}\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+            )
             return
 
         # TODO get last trade time
-
         # check if order price is within spread
         if order_price < best_ask_price and order_price > best_bid_price:
             # generate random order amount
@@ -137,7 +136,6 @@ class CustomVolumePumper(ScriptStrategyBase):
             order_amount = self.adjust_order_amount_for_balance(order_price, order_amount)
 
             # create order proposals and place them
-            # TODO adjust proposal to budget
             sell_order_proposal = self.generate_order_candidate(order_price, order_amount, False)
             self.place_order(self.exchange, sell_order_proposal)
 
@@ -147,6 +145,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
         # update last mid price timestamp
         self.start_orders_delay()
+        self.logger().info(f"\nNext order is delayed by {self.random_delay+self.delay_order_time} seconds")
 
     def init_strategy(self):
         """
@@ -310,5 +309,5 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def on_stop(self):
         self.cancel_all_orders()
-        self.logger().notify("Notification : Stopping strategy initiated.\nCanceling all orders")
+        self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
         return super().on_stop()
