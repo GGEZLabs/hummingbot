@@ -31,31 +31,34 @@ class CustomVolumePumperConfig(BaseClientModel):
     order_lower_amount: int = Field(
         500,
         client_data=ClientFieldData(
-            prompt_on_new=True, prompt=lambda mi: "Lower value for order amount (in base asset)"
+            prompt_on_new=True, prompt=lambda mi: "Lower value for order amount (in base asset , GGEZ1)"
         ),
     )
     order_upper_amount: int = Field(
         2000,
         client_data=ClientFieldData(
-            prompt_on_new=True, prompt=lambda mi: "Upper value for order amount (in base asset)"
+            prompt_on_new=True, prompt=lambda mi: "Upper value for order amount (in base asset , GGEZ1)"
         ),
     )
     delay_order_time: int = Field(
         120, client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Delay time between orders (in seconds)")
     )
+    max_random_delay: int = Field(
+        120,
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "Maximum random delay to be add to delay_order_time (in seconds)"
+        ),
+    )
     balance_loss_threshold: Decimal = Field(
-        0, client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Balance loss threshold (in quote asset)")
+        0,
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "Balance loss threshold (in quote asset , USDT)"
+        ),
     )
     minimum_ask_bid_spread: Decimal = Field(
-        1,
+        10,
         client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "minimum ask bid spread (basis points)"),
     )
-
-
-# TODO minimum_ask_bid_spread change it to be in basis points                                   DONE
-# TODO add stop trading parameter to stop all trades whe reaching the  balance_loss_threshold   DONE
-# TODO check order book diff function in connector
-# TODO Add random order delay time delay_order_time + randint(0, 120)                           DONE
 
 
 class CustomVolumePumper(ScriptStrategyBase):
@@ -72,6 +75,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.delay_order_time = config.delay_order_time
         self.balance_loss_threshold = config.balance_loss_threshold
         self.minimum_ask_bid_spread = config.minimum_ask_bid_spread
+        self.max_random_delay = config.max_random_delay
         self.price_source = PriceType.MidPrice
         self.last_mid_price_timestamp = time.time()
         self.random_delay = 0
@@ -104,17 +108,21 @@ class CustomVolumePumper(ScriptStrategyBase):
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
         if bid_ask_spread < self.covert_from_basis_point(self.minimum_ask_bid_spread):
-            self.logger().notify(f"Spread too low: {bid_ask_spread}")
             self.start_orders_delay()
+            self.logger().notify(
+                f"\nNOTIFICATION : Tight Spread.\nSpread {bid_ask_spread}\nOrder placing is delayed by { round(time.time() - self.last_mid_price_timestamp + self.random_delay + self.delay_order_time) } seconds"
+            )
             return
 
         # check if last trade price has changed
         order_book = self.connector.get_order_book(self.trading_pair)
         last_trade_price_new = order_book.last_trade_price
-        if last_trade_price_new != self.last_trade_price:
+        if last_trade_price_new != float(self.last_trade_price):
             # if last trade price has changed, update last trade price and timestamp
             self.last_trade_price = last_trade_price_new
-            self.logger().info(f"Last trade price: {self.last_trade_price}")
+            self.logger().info(
+                f"\nNOTIFICATION : Last Traded Price Has Changed.\nLast trade price: {self.last_trade_price}\nOrder placing is delayed"
+            )
             self.start_orders_delay()
             return
 
@@ -214,6 +222,8 @@ class CustomVolumePumper(ScriptStrategyBase):
         best_bid_price = self.connector.get_price(self.trading_pair, False)
         mid_price = self.connector.get_mid_price(self.trading_pair)
         order_price = Decimal((best_ask_price + mid_price) / 2) + randint(0, 99) * self.tick_size
+        # round order price to tick size
+        order_price = math.floor(order_price / self.tick_size) * self.tick_size
         return best_ask_price, best_bid_price, order_price
 
     def adjust_proposal_to_budget(self, proposal: OrderCandidate) -> OrderCandidate:
@@ -229,7 +239,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.cancel(self.exchange, order.trading_pair, order.client_order_id)
 
     def start_orders_delay(self):
-        self.random_delay = randint(0, 120)
+        self.random_delay = randint(0, self.max_random_delay)
         self.last_mid_price_timestamp = time.time()
 
     def stop_loss_when_balance_below_threshold(self):
@@ -256,7 +266,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
             self.logger().notify(notification)
             self.cancel_all_orders()
-            self.logger().notify("\nNotification : Stopping strategy initiated.\nCanceling all orders")
+            self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
             self.status = "STOPPED"
 
     def calculate_quote_base_balance_threshold(self):
