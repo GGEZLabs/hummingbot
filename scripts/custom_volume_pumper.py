@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from datetime import datetime
 from decimal import Decimal
 from random import randint
 from typing import Dict
@@ -57,7 +58,13 @@ class CustomVolumePumperConfig(BaseClientModel):
     )
     minimum_ask_bid_spread: Decimal = Field(
         10,
-        client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "minimum ask bid spread (basis points)"),
+        client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Minimum ask bid spread (basis points)"),
+    )
+    periodic_report_interval: float = Field(
+        60,
+        client_data=ClientFieldData(
+            prompt_on_new=True, prompt=lambda mi: "The interval for periodic report (in minutes)"
+        ),
     )
 
 
@@ -68,6 +75,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def __init__(self, connectors: Dict[str, ConnectorBase], config: CustomVolumePumperConfig):
         super().__init__(connectors)
+        # config data
         self.exchange = config.exchange
         self.trading_pair = config.trading_pair
         self.order_lower_amount = config.order_lower_amount
@@ -76,10 +84,24 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.balance_loss_threshold = config.balance_loss_threshold
         self.minimum_ask_bid_spread = config.minimum_ask_bid_spread
         self.max_random_delay = config.max_random_delay
+        self.periodic_report_interval = config.periodic_report_interval
+        # strategy data
         self.price_source = PriceType.MidPrice
         self.last_mid_price_timestamp = time.time()
         self.random_delay = 0
         self.status = "NOT_INITIALIZED"
+        # report data
+        self.report_frequency = 60 * self.periodic_report_interval  # seconds
+        self.last_report_timestamp = time.time()
+        self.total_traded_volume_quote = 0
+        self.total_traded_volume_base = 0
+        self.total_trades_count = 0
+        self.total_tight_spread_count = 0
+
+        self.interval_tight_spread_count = 0
+        self.interval_traded_volume_quote = 0
+        self.interval_traded_volume_base = 0
+        self.interval_trades_count = 0
 
     @property
     def connector(self):
@@ -111,12 +133,15 @@ class CustomVolumePumper(ScriptStrategyBase):
         #  cancel all orders active orders
         self.cancel_all_orders()
 
-        # risk management
-        self.stop_loss_when_balance_below_threshold()
+        if self.current_timestamp - self.last_report_timestamp >= self.report_frequency:
+            self.generate_periodic_summary()
 
         # check if last mid price timestamp is less than delay order time
-        if time.time() - self.last_mid_price_timestamp < self.delay_order_time + self.random_delay:
+        if self.current_timestamp - self.last_mid_price_timestamp < self.delay_order_time + self.random_delay:
             return
+
+        # risk management
+        self.stop_loss_when_balance_below_threshold()
 
         # calculate order price
         best_ask_price, best_bid_price, order_price = self.calculate_order_price()
@@ -125,9 +150,12 @@ class CustomVolumePumper(ScriptStrategyBase):
         bid_ask_spread = best_ask_price - best_bid_price
         if bid_ask_spread < self.convert_from_basis_point(self.minimum_ask_bid_spread):
             self.start_orders_delay()
-            self.logger().notify(
-                f"\nNOTIFICATION : Tight Spread.\nSpread {bid_ask_spread}\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
-            )
+            notification = "\nWARNING : Tight Spread."
+            notification += f"\nSpread {bid_ask_spread}"
+            notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+            self.logger().notify(notification)
+            self.total_tight_spread_count += 1
+            self.interval_tight_spread_count += 1
             return
 
         # check if last trade price has changed
@@ -137,9 +165,10 @@ class CustomVolumePumper(ScriptStrategyBase):
             # if last trade price has changed, update last trade price and timestamp
             self.last_trade_price = last_trade_price_new
             self.start_orders_delay()
-            self.logger().info(
-                f"\nNOTIFICATION : Last Traded Price Has Changed.\nLast trade price: {self.last_trade_price}\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
-            )
+            notification = "\nNOTIFICATION : Last Traded Price Has Changed."
+            notification += f"\nLast trade price: {self.last_trade_price}"
+            notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+            self.logger().info(notification)
             return
 
         # TODO get last trade time
@@ -158,10 +187,34 @@ class CustomVolumePumper(ScriptStrategyBase):
             buy_order_proposal = self.generate_order_candidate(order_price, order_amount, True)
             self.place_order(self.exchange, buy_order_proposal)
             self.last_trade_price = order_price
+            # update total and interval trade data
+            self.total_traded_volume_quote += order_amount * order_price
+            self.total_traded_volume_base += order_amount
+            self.total_trades_count += 1
+            self.interval_traded_volume_quote += order_amount * order_price
+            self.interval_traded_volume_base += order_amount
+            self.interval_trades_count += 1
 
         # update last mid price timestamp
         self.start_orders_delay()
         self.logger().info(f"\nNext order is delayed by {self.random_delay+self.delay_order_time} seconds")
+
+    def generate_periodic_summary(self):
+        notification = "\nPERIODIC SUMMARY REPORT"
+        notification += f"\nThis Report For The Last {self.periodic_report_interval} Minutes"
+        notification += f"\nTotal Traded Volume In Quote: {self.interval_traded_volume_quote} {self.quote}"
+        notification += f"\nTotal Traded Volume In Base: {self.interval_traded_volume_base} {self.base}"
+        notification += f"\nTotal Trades: {self.interval_trades_count}"
+        notification += f"\nInterval Tight Spread Error Count: {self.interval_tight_spread_count}"
+        notification += f"\nNext Report Will Be At : {datetime.fromtimestamp(self.current_timestamp + self.report_frequency).strftime('%Y-%m-%d %I:%M:%S %p')}"
+        self.logger().notify(notification)
+        # reset interval data
+        self.interval_tight_spread_count = 0
+        self.interval_traded_volume_quote = 0
+        self.interval_traded_volume_base = 0
+        self.interval_trades_count = 0
+        # update last report timestamp
+        self.last_report_timestamp = self.current_timestamp
 
     def convert_from_basis_point(self, basis_point):
         return basis_point / 10000
@@ -232,7 +285,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def start_orders_delay(self):
         self.random_delay = randint(0, self.max_random_delay)
-        self.last_mid_price_timestamp = time.time()
+        self.last_mid_price_timestamp = self.current_timestamp
 
     def stop_loss_when_balance_below_threshold(self):
         quote_threshold, base_threshold = self.calculate_quote_base_balance_threshold()
@@ -305,5 +358,12 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def on_stop(self):
         self.cancel_all_orders()
-        self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
+        notification = "\nNOTIFICATION : Stopping strategy initiated."
+        notification += "\nCanceling all orders"
+        notification += "\nSummary Report : "
+        notification += f"\nTotal Traded Volume In Quote: {self.total_traded_volume_quote} {self.quote}"
+        notification += f"\nTotal Traded Volume In Base: {self.total_traded_volume_base} {self.base}"
+        notification += f"\nTotal Trades: {self.total_trades_count}"
+        notification += f"\nTotal Tight Spread Error Count: {self.total_tight_spread_count}"
+        self.logger().notify(notification)
         return super().on_stop()
