@@ -85,6 +85,22 @@ class CustomVolumePumper(ScriptStrategyBase):
     def connector(self):
         return self.connectors[self.exchange]
 
+    def init_strategy(self):
+        """
+        Initialize strategy
+        - Query and set tick price (price quantum)
+        - Query and set taker & maker fees for specific trading pair (just fetches
+          it now, because it looks like HB just reads it from defaults instead of querying the exchange)
+        """
+        self.logger().info("Initializing strategy...")
+        best_bid_price = self.connector.get_mid_price(self.trading_pair)
+        self.tick_size = self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
+        self.logger().info(f"Tick size for {self.trading_pair} on {self.exchange}: {self.tick_size}")
+        self.base, self.quote = split_hb_trading_pair(self.trading_pair)
+        self.last_trade_price = self.connector.get_order_book(self.trading_pair).last_trade_price
+        self.starting_balance = self.get_balance_df()
+        self.status = "RUNNING"
+
     def on_tick(self):
         if self.status == "NOT_INITIALIZED":
             self.init_strategy()
@@ -107,7 +123,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
-        if bid_ask_spread < self.covert_from_basis_point(self.minimum_ask_bid_spread):
+        if bid_ask_spread < self.convert_from_basis_point(self.minimum_ask_bid_spread):
             self.start_orders_delay()
             self.logger().notify(
                 f"\nNOTIFICATION : Tight Spread.\nSpread {bid_ask_spread}\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
@@ -147,23 +163,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.start_orders_delay()
         self.logger().info(f"\nNext order is delayed by {self.random_delay+self.delay_order_time} seconds")
 
-    def init_strategy(self):
-        """
-        Initialize strategy
-        - Query and set tick price (price quantum)
-        - Query and set taker & maker fees for specific trading pair (just fetches
-          it now, because it looks like HB just reads it from defaults instead of querying the exchange)
-        """
-        self.logger().info("Initializing strategy...")
-        best_bid_price = self.connector.get_mid_price(self.trading_pair)
-        self.tick_size = self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
-        self.logger().info(f"Tick size for {self.trading_pair} on {self.exchange}: {self.tick_size}")
-        self.base, self.quote = split_hb_trading_pair(self.trading_pair)
-        self.last_trade_price = self.connector.get_order_book(self.trading_pair).last_trade_price
-        self.starting_balance = self.get_balance_df()
-        self.status = "RUNNING"
-
-    def covert_from_basis_point(self, basis_point):
+    def convert_from_basis_point(self, basis_point):
         return basis_point / 10000
 
     def place_order(self, connector_name: str, order: OrderCandidate):
@@ -225,16 +225,9 @@ class CustomVolumePumper(ScriptStrategyBase):
         order_price = math.floor(order_price / self.tick_size) * self.tick_size
         return best_ask_price, best_bid_price, order_price
 
-    def adjust_proposal_to_budget(self, proposal: OrderCandidate) -> OrderCandidate:
-        proposal_adjusted = self.connector.budget_checker.adjust_candidate(proposal, all_or_none=True)
-        return proposal_adjusted
-
     def cancel_all_orders(self):
         active_orders = self.get_active_orders(connector_name=self.exchange)
         for order in active_orders:
-            # time_now = time.time()
-            # cancel_when = (order.creation_timestamp * 1e-6) + 5
-            # if cancel_when < time_now:
             self.cancel(self.exchange, order.trading_pair, order.client_order_id)
 
     def start_orders_delay(self):
@@ -243,9 +236,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def stop_loss_when_balance_below_threshold(self):
         quote_threshold, base_threshold = self.calculate_quote_base_balance_threshold()
-
         balance_differences_df = self.get_balance_differences_df()
-
         base_condition, quote_condition = self.check_thresholds(balance_differences_df, base_threshold, quote_threshold)
 
         if base_condition or quote_condition:
@@ -296,11 +287,16 @@ class CustomVolumePumper(ScriptStrategyBase):
         return balance_differences_df
 
     def is_balance_below_threshold(self, balance_df, asset, threshold):
-        difference_balance = Decimal(abs(balance_df.loc[balance_df["Asset"] == asset, "Difference_Balance"].iloc[0]))
-        difference_available_balance = Decimal(
-            abs(balance_df.loc[balance_df["Asset"] == asset, "Difference_Available_Balance"].iloc[0])
-        )
-        return difference_balance > threshold or difference_available_balance > threshold
+        try:
+            difference_balance = abs(
+                Decimal(balance_df.loc[balance_df["Asset"] == asset, "Difference_Balance"].iloc[0])
+            )
+            difference_available_balance = abs(
+                Decimal(balance_df.loc[balance_df["Asset"] == asset, "Difference_Available_Balance"].iloc[0])
+            )
+            return difference_balance > threshold or difference_available_balance > threshold
+        except (KeyError, IndexError):
+            return False
 
     def check_thresholds(self, balance_df, base_threshold, quote_threshold):
         base_condition = self.is_balance_below_threshold(balance_df, self.base, base_threshold)
