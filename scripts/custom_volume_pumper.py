@@ -1,7 +1,7 @@
 import math
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from random import randint
 from typing import Dict
@@ -61,9 +61,9 @@ class CustomVolumePumperConfig(BaseClientModel):
         client_data=ClientFieldData(prompt_on_new=True, prompt=lambda mi: "Minimum ask bid spread (basis points)"),
     )
     periodic_report_interval: float = Field(
-        60,
+        0,
         client_data=ClientFieldData(
-            prompt_on_new=True, prompt=lambda mi: "The interval for periodic report (in minutes)"
+            prompt_on_new=True, prompt=lambda mi: "The interval for periodic report (in hours)"
         ),
     )
 
@@ -91,13 +91,14 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.random_delay = 0
         self.status = "NOT_INITIALIZED"
         # report data
-        self.report_frequency = 60 * self.periodic_report_interval  # seconds
+        self.starting_time = datetime.now()
+        self.report_frequency = 60 * 60 * self.periodic_report_interval  # seconds
         self.last_report_timestamp = time.time()
         self.total_traded_volume_quote = 0
         self.total_traded_volume_base = 0
         self.total_trades_count = 0
         self.total_tight_spread_count = 0
-
+        # interval report data
         self.interval_tight_spread_count = 0
         self.interval_traded_volume_quote = 0
         self.interval_traded_volume_base = 0
@@ -133,7 +134,10 @@ class CustomVolumePumper(ScriptStrategyBase):
         #  cancel all orders active orders
         self.cancel_all_orders()
 
-        if self.current_timestamp - self.last_report_timestamp >= self.report_frequency:
+        if (
+            self.periodic_report_interval > 0
+            and self.current_timestamp - self.last_report_timestamp >= self.report_frequency
+        ):
             self.generate_periodic_summary()
 
         # check if last mid price timestamp is less than delay order time
@@ -198,23 +202,6 @@ class CustomVolumePumper(ScriptStrategyBase):
         # update last mid price timestamp
         self.start_orders_delay()
         self.logger().info(f"\nNext order is delayed by {self.random_delay+self.delay_order_time} seconds")
-
-    def generate_periodic_summary(self):
-        notification = "\nPERIODIC SUMMARY REPORT"
-        notification += f"\nThis Report For The Last {self.periodic_report_interval} Minutes"
-        notification += f"\nTotal Traded Volume In Quote: {self.interval_traded_volume_quote} {self.quote}"
-        notification += f"\nTotal Traded Volume In Base: {self.interval_traded_volume_base} {self.base}"
-        notification += f"\nTotal Trades: {self.interval_trades_count}"
-        notification += f"\nInterval Tight Spread Error Count: {self.interval_tight_spread_count}"
-        notification += f"\nNext Report Will Be At : {datetime.fromtimestamp(self.current_timestamp + self.report_frequency).strftime('%Y-%m-%d %I:%M:%S %p')}"
-        self.logger().notify(notification)
-        # reset interval data
-        self.interval_tight_spread_count = 0
-        self.interval_traded_volume_quote = 0
-        self.interval_traded_volume_base = 0
-        self.interval_trades_count = 0
-        # update last report timestamp
-        self.last_report_timestamp = self.current_timestamp
 
     def convert_from_basis_point(self, basis_point):
         return basis_point / 10000
@@ -359,11 +346,55 @@ class CustomVolumePumper(ScriptStrategyBase):
     def on_stop(self):
         self.cancel_all_orders()
         notification = "\nNOTIFICATION : Stopping strategy initiated."
-        notification += "\nCanceling all orders"
-        notification += "\nSummary Report : "
-        notification += f"\nTotal Traded Volume In Quote: {self.total_traded_volume_quote} {self.quote}"
-        notification += f"\nTotal Traded Volume In Base: {self.total_traded_volume_base} {self.base}"
-        notification += f"\nTotal Trades: {self.total_trades_count}"
-        notification += f"\nTotal Tight Spread Error Count: {self.total_tight_spread_count}"
+        notification += f"\n{self.format_status()}"
         self.logger().notify(notification)
         return super().on_stop()
+
+    def format_status(self) -> str:
+        text = super().format_status()
+        return text + f"\n\n{self.create_report()}"
+
+    def format_duration(self, delta: timedelta) -> str:
+        days, seconds = delta.days, delta.seconds
+        hours, minutes = divmod(seconds, 3600)
+        minutes, seconds = divmod(minutes, 60)
+        return f"{days} day(s), {hours} hour(s), {minutes} minute(s), and {seconds} second(s)"
+
+    def create_report(self, is_periodic: bool = False) -> str:
+        if is_periodic:
+            report_type = "Periodic Summary Report"
+            traded_volume_quote = self.interval_traded_volume_quote
+            traded_volume_base = self.interval_traded_volume_base
+            trades_count = self.interval_trades_count
+            tight_spread_count = self.interval_tight_spread_count
+            report_duration = f"\nThis Report Covers The Last {self.periodic_report_interval} hour(s)"
+        else:
+            report_type = "Summary Report"
+            traded_volume_quote = self.total_traded_volume_quote
+            traded_volume_base = self.total_traded_volume_base
+            trades_count = self.total_trades_count
+            tight_spread_count = self.total_tight_spread_count
+            report_duration = ""
+
+        total_running_time = self.format_duration(delta=datetime.now() - self.starting_time)
+
+        report = (
+            f"\n{report_type}:"
+            f"{report_duration}"
+            f"\nTotal Traded Volume In Quote: {traded_volume_quote} {self.quote}"
+            f"\nTotal Traded Volume In Base: {traded_volume_base} {self.base}"
+            f"\nTotal Trades Count: {trades_count}"
+            f"\nTotal Tight Spread Error Count: {tight_spread_count}"
+            f"\nTotal Running Time: {total_running_time}"
+        )
+        return report
+
+    def generate_periodic_summary(self):
+        self.logger().notify(self.create_report(is_periodic=True))
+        # reset interval data
+        self.interval_tight_spread_count = 0
+        self.interval_traded_volume_quote = 0
+        self.interval_traded_volume_base = 0
+        self.interval_trades_count = 0
+        # update last report timestamp
+        self.last_report_timestamp = self.current_timestamp
