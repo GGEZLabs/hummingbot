@@ -282,17 +282,21 @@ class CustomVolumePumper(ScriptStrategyBase):
         if base_condition or quote_condition:
             notification = "\nWARNING : Balance below threshold."
             if base_condition:
-                base_balance = balance_differences_df.loc[
-                    balance_differences_df["Asset"] == self.base, "Current_Balance"
-                ].iloc[0]
+                base_balance = balance_differences_df.loc[balance_differences_df["Asset"] == self.base].iloc[0]
                 notification += "\nBase Asset getting below threshold"
-                notification += f"\nCurrent Base Balance: {str(base_balance)}"
+                notification += f"\nCurrent Base Balance: {str(base_balance['Current_Balance'])}"
+                notification += f"\nDifference Base : {str(base_balance['Difference_Balance'])}"
+                notification += (
+                    f"\nDifference Base Available Balance : {str(base_balance['Difference_Available_Balance'])}"
+                )
             if quote_condition:
-                quote_balance = balance_differences_df.loc[
-                    balance_differences_df["Asset"] == self.quote, "Current_Balance"
-                ].iloc[0]
+                quote_balance = balance_differences_df.loc[balance_differences_df["Asset"] == self.quote].iloc[0]
                 notification += "\nQuote Asset getting below threshold"
-                notification += f"\nCurrent Quote Balance: {str(quote_balance)}"
+                notification += f"\nCurrent Quote Balance: {str(quote_balance['Current_Balance'])}"
+                notification += f"\nDifference Quote : {str(quote_balance['Difference_Balance'])}"
+                notification += (
+                    f"\nDifference Quote Available Balance : {str(quote_balance['Difference_Available_Balance'])}"
+                )
 
             self.logger().notify(notification)
             self.cancel_all_orders()
