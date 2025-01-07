@@ -352,7 +352,12 @@ class CustomVolumePumper(ScriptStrategyBase):
 
     def format_status(self) -> str:
         text = super().format_status()
-        return text + f"\n\n{self.create_report()}"
+        order_info = (
+            f"\nOrder Info"
+            f"\nOrder Amount Range: {self.order_lower_amount} - {self.order_upper_amount} {self.base}"
+            f"\nDelay Order Time: {self.delay_order_time} seconds + Random Delay: 0 - {self.max_random_delay} seconds"
+        )
+        return text + f"\n\n{order_info}\n\n{self.create_report()}"
 
     def format_duration(self, delta: timedelta) -> str:
         days, seconds = delta.days, delta.seconds
