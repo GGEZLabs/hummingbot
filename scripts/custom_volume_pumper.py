@@ -129,6 +129,8 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.init_strategy()
 
         if self.status == "STOPPED":
+            # check if balance return to the starting balance
+            self.check_balance_return()
             return
 
         #  cancel all orders active orders
@@ -407,3 +409,10 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.interval_trades_count = 0
         # update last report timestamp
         self.last_report_timestamp = self.current_timestamp
+
+    def check_balance_return(self):
+        balance = self.get_balance_df()
+        if balance.equals(self.starting_balance):
+            self.status = "RUNNING"
+            notification = "\nNOTIFICATION : Balance has returned to starting balance.\nResuming strategy."
+            self.logger().notify(notification)
