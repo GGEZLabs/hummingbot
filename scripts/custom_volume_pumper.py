@@ -131,21 +131,6 @@ class CustomVolumePumper(ScriptStrategyBase):
         if self.status == "STOPPED":
             return
 
-        if self.status == "VALIDATING_STOP_LOSS":
-            #  wait for 3 min
-            if self.validating_stop_loss_after_timestamp is None:
-                self.validating_stop_loss_after_timestamp = self.current_timestamp
-
-            if self.current_timestamp - self.validating_stop_loss_after_timestamp < 180:
-                return
-
-            if self.stop_loss_when_balance_below_threshold():
-                self.status = "STOPPED"
-            else:
-                self.status = "RUNNING"
-
-            return
-
         #  cancel all orders active orders
         self.cancel_all_orders()
 
@@ -160,8 +145,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             return
 
         # risk management
-        if self.stop_loss_when_balance_below_threshold():
-            return
+        self.stop_loss_when_balance_below_threshold()
 
         # calculate order price
         best_ask_price, best_bid_price, order_price = self.calculate_order_price()
@@ -314,15 +298,10 @@ class CustomVolumePumper(ScriptStrategyBase):
                     f"\nDifference Quote Available Balance : {str(quote_balance['Difference_Available_Balance'])}"
                 )
 
-            if self.status == "VALIDATING_STOP_LOSS":
-                self.logger().notify(notification)
-                self.cancel_all_orders()
-                self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
-                self.status = "STOPPED"
-            else:
-                self.status = "VALIDATING_STOP_LOSS"
-
-            return base_condition or quote_condition
+            self.logger().notify(notification)
+            self.cancel_all_orders()
+            self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
+            self.status = "STOPPED"
 
     def calculate_quote_base_balance_threshold(self):
         quote_threshold = self.balance_loss_threshold
