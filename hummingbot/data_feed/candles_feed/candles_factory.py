@@ -6,6 +6,7 @@ from hummingbot.data_feed.candles_feed.binance_spot_candles import BinanceSpotCa
 from hummingbot.data_feed.candles_feed.bybit_perpetual_candles.bybit_perpetual_candles import BybitPerpetualCandles
 from hummingbot.data_feed.candles_feed.bybit_spot_candles.bybit_spot_candles import BybitSpotCandles
 from hummingbot.data_feed.candles_feed.candles_base import CandlesBase
+from hummingbot.data_feed.candles_feed.coinstore_spot_candles.coinstore_spot_candles import CoinstoreSpotCandles
 from hummingbot.data_feed.candles_feed.data_types import CandlesConfig
 from hummingbot.data_feed.candles_feed.gate_io_perpetual_candles import GateioPerpetualCandles
 from hummingbot.data_feed.candles_feed.gate_io_spot_candles import GateioSpotCandles
@@ -52,7 +53,8 @@ class CandlesFactory:
         "bybit": BybitSpotCandles,
         "bybit_perpetual": BybitPerpetualCandles,
         "hyperliquid": HyperliquidSpotCandles,
-        "hyperliquid_perpetual": HyperliquidPerpetualCandles
+        "hyperliquid_perpetual": HyperliquidPerpetualCandles,
+        "coinstore": CoinstoreSpotCandles,
     }
 
     @classmethod
