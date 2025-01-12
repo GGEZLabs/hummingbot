@@ -219,6 +219,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         text = super().format_status()
         order_info = (
             f"\nStrategy Config :"
+            f"\nBot Status: {self.status}"
             f"\nExchange: {self.exchange} Trading Pair: {self.trading_pair}"
             f"\nOrder Amount Range: {self.order_lower_amount} - {self.order_upper_amount} {self.base}"
             f"\nDelay Order Time: {self.delay_order_time} seconds + Random Delay: 0 - {self.max_random_delay} seconds"
