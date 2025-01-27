@@ -50,11 +50,11 @@ class CustomVolumePumperUtils:
 
         return order_amount
 
-    def calculate_order_price(self):
+    def calculate_order_price(self, minimum_ask_bid_spread: int) -> Decimal:
         best_ask_price = self.connector.get_price(self.trading_pair, True)
         best_bid_price = self.connector.get_price(self.trading_pair, False)
         mid_price = self.connector.get_mid_price(self.trading_pair)
-        order_price = Decimal((best_ask_price + mid_price) / 2) + randint(0, 99) * self.tick_size
+        order_price = Decimal((best_ask_price + mid_price) / 2) + randint(0, minimum_ask_bid_spread) * self.tick_size
         # round order price to tick size
         order_price = math.floor(order_price / self.tick_size) * self.tick_size
         return best_ask_price, best_bid_price, order_price

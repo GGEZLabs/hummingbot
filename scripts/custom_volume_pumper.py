@@ -28,7 +28,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.order_upper_amount = config.order_upper_amount
         self.delay_order_time = config.delay_order_time
         self.balance_loss_threshold = config.balance_loss_threshold
-        self.minimum_ask_bid_spread = config.minimum_ask_bid_spread
+        self.minimum_ask_bid_spread_BS = config.minimum_ask_bid_spread
         self.max_random_delay = config.max_random_delay
         self.periodic_report_interval = config.periodic_report_interval
         # strategy data
@@ -120,11 +120,13 @@ class CustomVolumePumper(ScriptStrategyBase):
             return
 
         # calculate order price
-        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price()
+        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price(
+            minimum_ask_bid_spread=int(self.minimum_ask_bid_spread_BS)
+        )
 
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
-        if bid_ask_spread < self.utils.convert_from_basis_point(self.minimum_ask_bid_spread):
+        if bid_ask_spread < self.utils.convert_from_basis_point(self.minimum_ask_bid_spread_BS):
             self.start_orders_delay()
             notification = "\nWARNING : Tight Spread."
             notification += f"\nSpread {bid_ask_spread}"
@@ -223,7 +225,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             f"\nExchange: {self.exchange} Trading Pair: {self.trading_pair}"
             f"\nOrder Amount Range: {self.order_lower_amount} - {self.order_upper_amount} {self.base}"
             f"\nDelay Order Time: {self.delay_order_time} seconds + Random Delay: 0 - {self.max_random_delay} seconds"
-            f"\nMinimum Ask Bid Spread: {self.minimum_ask_bid_spread} basis points"
+            f"\nMinimum Ask Bid Spread: {self.minimum_ask_bid_spread_BS} basis points"
             f"\nBalance Loss Threshold: {self.balance_loss_threshold} {self.quote}"
             f"\nPeriodic Report Interval: {self.periodic_report_interval} hour(s)"
         )
