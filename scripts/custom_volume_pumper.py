@@ -79,6 +79,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             base=self.base,
             quote=self.quote,
         )
+        self.minimum_ask_bid_spread = self.utils.convert_from_basis_point(self.minimum_ask_bid_spread_BS)
 
     def on_tick(self):
         if self.status == "NOT_INITIALIZED":
@@ -120,13 +121,11 @@ class CustomVolumePumper(ScriptStrategyBase):
             return
 
         # calculate order price
-        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price(
-            minimum_ask_bid_spread=int(self.minimum_ask_bid_spread_BS)
-        )
+        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price(self.minimum_ask_bid_spread)
 
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
-        if bid_ask_spread < self.utils.convert_from_basis_point(self.minimum_ask_bid_spread_BS):
+        if bid_ask_spread < self.minimum_ask_bid_spread:
             self.start_orders_delay()
             notification = "\nWARNING : Tight Spread."
             notification += f"\nSpread {bid_ask_spread}"
