@@ -1,6 +1,6 @@
 import math
 from decimal import Decimal
-from random import randint
+from random import uniform
 
 import pandas as pd
 
@@ -53,25 +53,16 @@ class CustomVolumePumperUtils:
     def convert_from_basis_point(self, basis_point):
         return basis_point / 10000
 
-    def significant_figures(self, number) -> int:
-        if number == 0:
-            return 0
-
-        normalized = f"{number:.1e}"  # Convert to scientific notation
-        _, exponent = normalized.split("e")
-        return int(abs(float(exponent)))
-
-    def max_random_order_price(self, minimum_ask_bid_spread: Decimal) -> int:
-        return int(abs(minimum_ask_bid_spread - self.tick_size) * 10 ** self.significant_figures(self.tick_size)) + 1
-
     def round_price_to_tick_size(self, price: Decimal) -> Decimal:
         return math.floor(price / self.tick_size) * self.tick_size
 
-    def calculate_order_price(self, minimum_ask_bid_spread: int) -> Decimal:
+    def calculate_order_price(self) -> Decimal:
         best_ask_price = self.connector.get_price(self.trading_pair, True)
         best_bid_price = self.connector.get_price(self.trading_pair, False)
         mid_price = self.connector.get_mid_price(self.trading_pair)
-        max_random_price = self.max_random_order_price(minimum_ask_bid_spread)
-        order_price = Decimal((best_ask_price + mid_price) / 2) + randint(0, max_random_price) * self.tick_size
+        order_price = Decimal((best_ask_price + mid_price) / 2)
+        # adjust order price with random value
+        order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
+        # round to tick size
         order_price = self.round_price_to_tick_size(order_price)
         return best_ask_price, best_bid_price, order_price

@@ -121,7 +121,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             return
 
         # calculate order price
-        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price(self.minimum_ask_bid_spread)
+        best_ask_price, best_bid_price, order_price = self.utils.calculate_order_price()
 
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
