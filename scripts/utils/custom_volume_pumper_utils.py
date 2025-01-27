@@ -61,7 +61,7 @@ class CustomVolumePumperUtils:
         _, exponent = normalized.split("e")
         return int(abs(float(exponent)))
 
-    def max_random_order_price(self, minimum_ask_bid_spread: Decimal, ask_mid_spread: Decimal) -> int:
+    def max_random_order_price(self, minimum_ask_bid_spread: Decimal) -> int:
         return int(abs(minimum_ask_bid_spread - self.tick_size) * 10 ** self.significant_figures(self.tick_size)) + 1
 
     def round_price_to_tick_size(self, price: Decimal) -> Decimal:
