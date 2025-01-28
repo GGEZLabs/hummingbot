@@ -152,10 +152,12 @@ class RandomTransaction(ScriptStrategyBase):
         )
         recipient_address = recipient["address"]
 
+        # Random amount in uggez1
         amount = random.randint(
             self.config.min_tx_amount, self.config.max_tx_amount
-        )  # Random amount in uggez1
-
+        )
+        if amount % 1_000_000 != 0:
+            amount = round(amount / 1_000_000) * 1_000_000
         try:
             balance = await self.get_account_balance(sender_address)
             uggez1_balance = next(
