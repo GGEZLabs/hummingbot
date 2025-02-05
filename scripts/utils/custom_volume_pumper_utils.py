@@ -1,6 +1,6 @@
 import math
 from decimal import Decimal
-from random import uniform
+from random import randint
 
 import pandas as pd
 
@@ -21,7 +21,7 @@ class CustomVolumePumperUtils:
         self.trading_pair = trading_pair
         self.base = base
         self.quote = quote
-        pass
+        self._current_price_movement = "up"
 
     @property
     def tick_size(self):
@@ -56,13 +56,29 @@ class CustomVolumePumperUtils:
     def round_price_to_tick_size(self, price: Decimal) -> Decimal:
         return math.floor(price / self.tick_size) * self.tick_size
 
+    def distance_from_last_trade_price(
+        self, ask_price: Decimal, bid_price: Decimal, last_trade_price: Decimal
+    ) -> Decimal:
+        range = ask_price - bid_price
+        bid_distance_from_last_trade_price = (last_trade_price - bid_price) / range
+        return bid_distance_from_last_trade_price * Decimal(100)
+
     def calculate_order_price(self) -> Decimal:
         best_ask_price = self.connector.get_price(self.trading_pair, True)
         best_bid_price = self.connector.get_price(self.trading_pair, False)
-        mid_price = self.connector.get_mid_price(self.trading_pair)
-        order_price = Decimal((best_ask_price + mid_price) / 2)
+        # mid_price = self.connector.get_mid_price(self.trading_pair)
+        last_trade_price = Decimal(self.connector.get_order_book(self.trading_pair).last_trade_price)
+        bid_distance_percentage = self.distance_from_last_trade_price(best_ask_price, best_bid_price, last_trade_price)
+        if bid_distance_percentage < 10:
+            self._current_price_movement = "up"
+        elif bid_distance_percentage > 90:
+            self._current_price_movement = "down"
+        order_price = Decimal(
+            last_trade_price
+            + self.tick_size * Decimal(randint(-5, 10)) * (1 if self._current_price_movement == "up" else -1)
+        )
         # adjust order price with random value
-        order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
+        # order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
         # round to tick size
         order_price = self.round_price_to_tick_size(order_price)
         return best_ask_price, best_bid_price, order_price
