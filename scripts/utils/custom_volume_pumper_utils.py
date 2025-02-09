@@ -69,13 +69,13 @@ class CustomVolumePumperUtils:
         # mid_price = self.connector.get_mid_price(self.trading_pair)
         last_trade_price = Decimal(self.connector.get_order_book(self.trading_pair).last_trade_price)
         bid_distance_percentage = self.distance_from_last_trade_price(best_ask_price, best_bid_price, last_trade_price)
-        if bid_distance_percentage < 10:
+        if bid_distance_percentage < 5:
             self._current_price_movement = "up"
-        elif bid_distance_percentage > 90:
+        elif bid_distance_percentage > 95:
             self._current_price_movement = "down"
         order_price = Decimal(
             last_trade_price
-            + self.tick_size * Decimal(randint(-5, 10)) * (1 if self._current_price_movement == "up" else -1)
+            + self.tick_size * Decimal(randint(-3, 5)) * (1 if self._current_price_movement == "up" else -1)
         )
         # adjust order price with random value
         # order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
