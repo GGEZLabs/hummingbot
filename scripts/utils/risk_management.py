@@ -53,10 +53,11 @@ class RiskManagement:
             difference_balance = abs(
                 Decimal(balance_df.loc[balance_df["Asset"] == asset, "Difference_Balance"].iloc[0])
             )
-            difference_available_balance = abs(
-                Decimal(balance_df.loc[balance_df["Asset"] == asset, "Difference_Available_Balance"].iloc[0])
-            )
-            return difference_balance > threshold or difference_available_balance > threshold
+            # difference_available_balance = abs(
+            #     Decimal(balance_df.loc[balance_df["Asset"] == asset, "Difference_Available_Balance"].iloc[0])
+            # )
+            return difference_balance > threshold
+            # or difference_available_balance > threshold
         except (KeyError, IndexError):
             return False
 
