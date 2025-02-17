@@ -3,7 +3,7 @@ import time
 from typing import TYPE_CHECKING, List, Optional
 
 from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_web_utils as web_utils
-from hummingbot.connector.exchange.p2b.p2b_auth import P2BAuth
+from hummingbot.connector.exchange.p2b.p2b_auth import P2bAuth
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.core.web_assistant.connections.data_types import RESTMethod
@@ -12,10 +12,10 @@ from hummingbot.core.web_assistant.ws_assistant import WSAssistant
 from hummingbot.logger import HummingbotLogger
 
 if TYPE_CHECKING:
-    from hummingbot.connector.exchange.p2b.p2b_exchange import P2BExchange
+    from hummingbot.connector.exchange.p2b.p2b_exchange import P2bExchange
 
 
-class P2BAPIUserStreamDataSource(UserStreamTrackerDataSource):
+class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     LISTEN_KEY_KEEP_ALIVE_INTERVAL = 1800  # Recommended to Ping/Update listen key to keep connection alive
     HEARTBEAT_TIME_INTERVAL = 30.0
@@ -23,13 +23,13 @@ class P2BAPIUserStreamDataSource(UserStreamTrackerDataSource):
     _logger: Optional[HummingbotLogger] = None
 
     def __init__(self,
-                 auth: P2BAuth,
+                 auth: P2bAuth,
                  trading_pairs: List[str],
-                 connector: 'P2BExchange',
+                 connector: 'P2bExchange',
                  api_factory: WebAssistantsFactory,
                  domain: str = CONSTANTS.DEFAULT_DOMAIN):
         super().__init__()
-        self._auth: P2BAuth = auth
+        self._auth: P2bAuth = auth
         self._current_listen_key = None
         self._domain = domain
         self._api_factory = api_factory
@@ -53,7 +53,7 @@ class P2BAPIUserStreamDataSource(UserStreamTrackerDataSource):
         """
         Subscribes to the trade events and diff orders events through the provided websocket connection.
 
-        P2B does not require any channel subscription.
+        P2b does not require any channel subscription.
 
         :param websocket_assistant: the websocket assistant used to connect to the exchange
         """

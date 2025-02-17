@@ -5,14 +5,10 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
-from hummingbot.connector.exchange.p2b import (
-    p2b_constants as CONSTANTS,
-    p2b_utils,
-    p2b_web_utils as web_utils,
-)
-from hummingbot.connector.exchange.p2b.p2b_api_order_book_data_source import P2BAPIOrderBookDataSource
-from hummingbot.connector.exchange.p2b.p2b_api_user_stream_data_source import P2BAPIUserStreamDataSource
-from hummingbot.connector.exchange.p2b.p2b_auth import P2BAuth
+from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_utils, p2b_web_utils as web_utils
+from hummingbot.connector.exchange.p2b.p2b_api_order_book_data_source import P2bAPIOrderBookDataSource
+from hummingbot.connector.exchange.p2b.p2b_api_user_stream_data_source import P2bAPIUserStreamDataSource
+from hummingbot.connector.exchange.p2b.p2b_auth import P2bAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.connector.utils import TradeFillOrderDetails, combine_to_hb_trading_pair
@@ -30,19 +26,20 @@ if TYPE_CHECKING:
     from hummingbot.client.config.config_helpers import ClientConfigAdapter
 
 
-class P2BExchange(ExchangePyBase):
+class P2bExchange(ExchangePyBase):
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
 
     web_utils = web_utils
 
-    def __init__(self,
-                 client_config_map: "ClientConfigAdapter",
-                 p2b_api_key: str,
-                 p2b_api_secret: str,
-                 trading_pairs: Optional[List[str]] = None,
-                 trading_required: bool = True,
-                 domain: str = CONSTANTS.DEFAULT_DOMAIN,
-                 ):
+    def __init__(
+        self,
+        client_config_map: "ClientConfigAdapter",
+        p2b_api_key: str,
+        p2b_api_secret: str,
+        trading_pairs: Optional[List[str]] = None,
+        trading_required: bool = True,
+        domain: str = CONSTANTS.DEFAULT_DOMAIN,
+    ):
         self.api_key = p2b_api_key
         self.secret_key = p2b_api_secret
         self._domain = domain
@@ -61,10 +58,7 @@ class P2BExchange(ExchangePyBase):
 
     @property
     def authenticator(self):
-        return P2BAuth(
-            api_key=self.api_key,
-            secret_key=self.secret_key,
-            time_provider=self._time_synchronizer)
+        return P2bAuth(api_key=self.api_key, secret_key=self.secret_key, time_provider=self._time_synchronizer)
 
     @property
     def name(self) -> str:
@@ -91,11 +85,11 @@ class P2BExchange(ExchangePyBase):
 
     @property
     def trading_rules_request_path(self):
-        return CONSTANTS.EXCHANGE_INFO_PATH_URL
+        return CONSTANTS.MARKETS_PATH_URL
 
     @property
     def trading_pairs_request_path(self):
-        return CONSTANTS.EXCHANGE_INFO_PATH_URL
+        return CONSTANTS.MARKETS_PATH_URL
 
     @property
     def check_network_request_path(self):
@@ -122,8 +116,9 @@ class P2BExchange(ExchangePyBase):
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception):
         error_description = str(request_exception)
-        is_time_synchronizer_related = ("-1021" in error_description
-                                        and "Timestamp for this request" in error_description)
+        is_time_synchronizer_related = (
+            "-1021" in error_description and "Timestamp for this request" in error_description
+        )
         return is_time_synchronizer_related
 
     def _is_order_not_found_during_status_update_error(self, status_update_exception: Exception) -> bool:
@@ -138,20 +133,19 @@ class P2BExchange(ExchangePyBase):
 
     def _create_web_assistants_factory(self) -> WebAssistantsFactory:
         return web_utils.build_api_factory(
-            throttler=self._throttler,
-            time_synchronizer=self._time_synchronizer,
-            domain=self._domain,
-            auth=self._auth)
+            throttler=self._throttler, time_synchronizer=self._time_synchronizer, domain=self._domain, auth=self._auth
+        )
 
     def _create_order_book_data_source(self) -> OrderBookTrackerDataSource:
-        return P2BAPIOrderBookDataSource(
+        return P2bAPIOrderBookDataSource(
             trading_pairs=self._trading_pairs,
             connector=self,
             domain=self.domain,
-            api_factory=self._web_assistants_factory)
+            api_factory=self._web_assistants_factory,
+        )
 
     def _create_user_stream_data_source(self) -> UserStreamTrackerDataSource:
-        return P2BAPIUserStreamDataSource(
+        return P2bAPIUserStreamDataSource(
             auth=self._auth,
             trading_pairs=self._trading_pairs,
             connector=self,
@@ -159,35 +153,41 @@ class P2BExchange(ExchangePyBase):
             domain=self.domain,
         )
 
-    def _get_fee(self,
-                 base_currency: str,
-                 quote_currency: str,
-                 order_type: OrderType,
-                 order_side: TradeType,
-                 amount: Decimal,
-                 price: Decimal = s_decimal_NaN,
-                 is_maker: Optional[bool] = None) -> TradeFeeBase:
+    def _get_fee(
+        self,
+        base_currency: str,
+        quote_currency: str,
+        order_type: OrderType,
+        order_side: TradeType,
+        amount: Decimal,
+        price: Decimal = s_decimal_NaN,
+        is_maker: Optional[bool] = None,
+    ) -> TradeFeeBase:
         is_maker = order_type is OrderType.LIMIT_MAKER
         return DeductedFromReturnsTradeFee(percent=self.estimate_fee_pct(is_maker))
 
-    async def _place_order(self,
-                           order_id: str,
-                           trading_pair: str,
-                           amount: Decimal,
-                           trade_type: TradeType,
-                           order_type: OrderType,
-                           price: Decimal,
-                           **kwargs) -> Tuple[str, float]:
+    async def _place_order(
+        self,
+        order_id: str,
+        trading_pair: str,
+        amount: Decimal,
+        trade_type: TradeType,
+        order_type: OrderType,
+        price: Decimal,
+        **kwargs,
+    ) -> Tuple[str, float]:
         order_result = None
         amount_str = f"{amount:f}"
-        type_str = P2BExchange.p2b_order_type(order_type)
+        type_str = P2bExchange.p2b_order_type(order_type)
         side_str = CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        api_params = {"symbol": symbol,
-                      "side": side_str,
-                      "quantity": amount_str,
-                      "type": type_str,
-                      "newClientOrderId": order_id}
+        api_params = {
+            "symbol": symbol,
+            "side": side_str,
+            "quantity": amount_str,
+            "type": type_str,
+            "newClientOrderId": order_id,
+        }
         if order_type is OrderType.LIMIT or order_type is OrderType.LIMIT_MAKER:
             price_str = f"{price:f}"
             api_params["price"] = price_str
@@ -196,15 +196,16 @@ class P2BExchange(ExchangePyBase):
 
         try:
             order_result = await self._api_post(
-                path_url=CONSTANTS.ORDER_PATH_URL,
-                data=api_params,
-                is_auth_required=True)
+                path_url=CONSTANTS.ORDER_PATH_URL, data=api_params, is_auth_required=True
+            )
             o_id = str(order_result["orderId"])
             transact_time = order_result["transactTime"] * 1e-3
         except IOError as e:
             error_description = str(e)
-            is_server_overloaded = ("status is 503" in error_description
-                                    and "Unknown error, please check your request or try again later." in error_description)
+            is_server_overloaded = (
+                "status is 503" in error_description
+                and "Unknown error, please check your request or try again later." in error_description
+            )
             if is_server_overloaded:
                 o_id = "UNKNOWN"
                 transact_time = self._time_synchronizer.time()
@@ -219,9 +220,8 @@ class P2BExchange(ExchangePyBase):
             "origClientOrderId": order_id,
         }
         cancel_result = await self._api_delete(
-            path_url=CONSTANTS.ORDER_PATH_URL,
-            params=api_params,
-            is_auth_required=True)
+            path_url=CONSTANTS.ORDER_PATH_URL, params=api_params, is_auth_required=True
+        )
         if cancel_result.get("status") == "CANCELED":
             return True
         return False
@@ -268,11 +268,14 @@ class P2BExchange(ExchangePyBase):
                 min_notional = Decimal(min_notional_filter.get("minNotional"))
 
                 retval.append(
-                    TradingRule(trading_pair,
-                                min_order_size=min_order_size,
-                                min_price_increment=Decimal(tick_size),
-                                min_base_amount_increment=Decimal(step_size),
-                                min_notional_size=Decimal(min_notional)))
+                    TradingRule(
+                        trading_pair,
+                        min_order_size=min_order_size,
+                        min_price_increment=Decimal(tick_size),
+                        min_base_amount_increment=Decimal(step_size),
+                        min_notional_size=Decimal(min_notional),
+                    )
+                )
 
             except Exception:
                 self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
@@ -298,7 +301,7 @@ class P2BExchange(ExchangePyBase):
             try:
                 event_type = event_message.get("e")
                 # Refer to https://github.com/p2b-exchange/p2b-official-api-docs/blob/master/user-data-stream.md
-                # As per the order update section in P2B the ID of the order being canceled is under the "C" key
+                # As per the order update section in P2b the ID of the order being canceled is under the "C" key
                 if event_type == "executionReport":
                     execution_type = event_message.get("x")
                     if execution_type != "CANCELED":
@@ -313,7 +316,7 @@ class P2BExchange(ExchangePyBase):
                                 fee_schema=self.trade_fee_schema(),
                                 trade_type=tracked_order.trade_type,
                                 percent_token=event_message["N"],
-                                flat_fees=[TokenAmount(amount=Decimal(event_message["n"]), token=event_message["N"])]
+                                flat_fees=[TokenAmount(amount=Decimal(event_message["n"]), token=event_message["N"])],
                             )
                             trade_update = TradeUpdate(
                                 trade_id=str(event_message["t"]),
@@ -357,10 +360,10 @@ class P2BExchange(ExchangePyBase):
     async def _update_order_fills_from_trades(self):
         """
         This is intended to be a backup measure to get filled events with trade ID for orders,
-        in case P2B's user stream events are not working.
+        in case P2b's user stream events are not working.
         NOTE: It is not required to copy this functionality in other connectors.
         This is separated from _update_order_status which only updates the order status without producing filled
-        events, since P2B's get order endpoint does not return trade IDs.
+        events, since P2b's get order endpoint does not return trade IDs.
         The minimum poll interval for order status is 10 seconds.
         """
         small_interval_last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
@@ -368,8 +371,9 @@ class P2BExchange(ExchangePyBase):
         long_interval_last_tick = self._last_poll_timestamp / self.LONG_POLL_INTERVAL
         long_interval_current_tick = self.current_timestamp / self.LONG_POLL_INTERVAL
 
-        if (long_interval_current_tick > long_interval_last_tick
-                or (self.in_flight_orders and small_interval_current_tick > small_interval_last_tick)):
+        if long_interval_current_tick > long_interval_last_tick or (
+            self.in_flight_orders and small_interval_current_tick > small_interval_last_tick
+        ):
             query_time = int(self._last_trades_poll_p2b_timestamp * 1e3)
             self._last_trades_poll_p2b_timestamp = self._time_synchronizer.time()
             order_by_exchange_id_map = {}
@@ -379,15 +383,10 @@ class P2BExchange(ExchangePyBase):
             tasks = []
             trading_pairs = self.trading_pairs
             for trading_pair in trading_pairs:
-                params = {
-                    "symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-                }
+                params = {"symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)}
                 if self._last_poll_timestamp > 0:
                     params["startTime"] = query_time
-                tasks.append(self._api_get(
-                    path_url=CONSTANTS.MY_TRADES_PATH_URL,
-                    params=params,
-                    is_auth_required=True))
+                tasks.append(self._api_get(path_url=CONSTANTS.MY_TRADES_PATH_URL, params=params, is_auth_required=True))
 
             self.logger().debug(f"Polling for order fills of {len(tasks)} trading pairs.")
             results = await safe_gather(*tasks, return_exceptions=True)
@@ -397,7 +396,7 @@ class P2BExchange(ExchangePyBase):
                 if isinstance(trades, Exception):
                     self.logger().network(
                         f"Error fetching trades update for the order {trading_pair}: {trades}.",
-                        app_warning_msg=f"Failed to fetch trade update for {trading_pair}."
+                        app_warning_msg=f"Failed to fetch trade update for {trading_pair}.",
                     )
                     continue
                 for trade in trades:
@@ -409,7 +408,9 @@ class P2BExchange(ExchangePyBase):
                             fee_schema=self.trade_fee_schema(),
                             trade_type=tracked_order.trade_type,
                             percent_token=trade["commissionAsset"],
-                            flat_fees=[TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])]
+                            flat_fees=[
+                                TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])
+                            ],
                         )
                         trade_update = TradeUpdate(
                             trade_id=str(trade["id"]),
@@ -425,10 +426,11 @@ class P2BExchange(ExchangePyBase):
                         self._order_tracker.process_trade_update(trade_update)
                     elif self.is_confirmed_new_order_filled_event(str(trade["id"]), exchange_order_id, trading_pair):
                         # This is a fill of an order registered in the DB but not tracked any more
-                        self._current_trade_fills.add(TradeFillOrderDetails(
-                            market=self.display_name,
-                            exchange_trade_id=str(trade["id"]),
-                            symbol=trading_pair))
+                        self._current_trade_fills.add(
+                            TradeFillOrderDetails(
+                                market=self.display_name, exchange_trade_id=str(trade["id"]), symbol=trading_pair
+                            )
+                        )
                         self.trigger_event(
                             MarketEvent.OrderFilled,
                             OrderFilledEvent(
@@ -440,15 +442,11 @@ class P2BExchange(ExchangePyBase):
                                 price=Decimal(trade["price"]),
                                 amount=Decimal(trade["qty"]),
                                 trade_fee=DeductedFromReturnsTradeFee(
-                                    flat_fees=[
-                                        TokenAmount(
-                                            trade["commissionAsset"],
-                                            Decimal(trade["commission"])
-                                        )
-                                    ]
+                                    flat_fees=[TokenAmount(trade["commissionAsset"], Decimal(trade["commission"]))]
                                 ),
-                                exchange_trade_id=str(trade["id"])
-                            ))
+                                exchange_trade_id=str(trade["id"]),
+                            ),
+                        )
                         self.logger().info(f"Recreating missing trade in TradeFill: {trade}")
 
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
@@ -459,12 +457,10 @@ class P2BExchange(ExchangePyBase):
             trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=order.trading_pair)
             all_fills_response = await self._api_get(
                 path_url=CONSTANTS.MY_TRADES_PATH_URL,
-                params={
-                    "symbol": trading_pair,
-                    "orderId": exchange_order_id
-                },
+                params={"symbol": trading_pair, "orderId": exchange_order_id},
                 is_auth_required=True,
-                limit_id=CONSTANTS.MY_TRADES_PATH_URL)
+                limit_id=CONSTANTS.MY_TRADES_PATH_URL,
+            )
 
             for trade in all_fills_response:
                 exchange_order_id = str(trade["orderId"])
@@ -472,7 +468,7 @@ class P2BExchange(ExchangePyBase):
                     fee_schema=self.trade_fee_schema(),
                     trade_type=order.trade_type,
                     percent_token=trade["commissionAsset"],
-                    flat_fees=[TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])]
+                    flat_fees=[TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])],
                 )
                 trade_update = TradeUpdate(
                     trade_id=str(trade["id"]),
@@ -493,10 +489,9 @@ class P2BExchange(ExchangePyBase):
         trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
         updated_order_data = await self._api_get(
             path_url=CONSTANTS.ORDER_PATH_URL,
-            params={
-                "symbol": trading_pair,
-                "origClientOrderId": tracked_order.client_order_id},
-            is_auth_required=True)
+            params={"symbol": trading_pair, "origClientOrderId": tracked_order.client_order_id},
+            is_auth_required=True,
+        )
 
         new_state = CONSTANTS.ORDER_STATE[updated_order_data["status"]]
 
@@ -513,16 +508,12 @@ class P2BExchange(ExchangePyBase):
     async def _update_balances(self):
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
-
-        account_info = await self._api_get(
-            path_url=CONSTANTS.ACCOUNTS_PATH_URL,
-            is_auth_required=True)
-
-        balances = account_info["balances"]
-        for balance_entry in balances:
-            asset_name = balance_entry["asset"]
-            free_balance = Decimal(balance_entry["free"])
-            total_balance = Decimal(balance_entry["free"]) + Decimal(balance_entry["locked"])
+        account_info = await self._api_post(path_url=CONSTANTS.BALANCES_PATH_URL, data={}, is_auth_required=True)
+        balances = account_info["result"]
+        # TODO filter out zero balances from the response
+        for asset_name in balances:
+            free_balance = Decimal(balances[asset_name]['available'])
+            total_balance = Decimal(balances[asset_name]['available']) + Decimal(balances[asset_name]['freeze'])
             self._account_available_balances[asset_name] = free_balance
             self._account_balances[asset_name] = total_balance
             remote_asset_names.add(asset_name)
@@ -534,20 +525,17 @@ class P2BExchange(ExchangePyBase):
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
-        for symbol_data in filter(p2b_utils.is_exchange_information_valid, exchange_info["symbols"]):
-            mapping[symbol_data["symbol"]] = combine_to_hb_trading_pair(base=symbol_data["baseAsset"],
-                                                                        quote=symbol_data["quoteAsset"])
+        for symbol_data in filter(p2b_utils.is_exchange_information_valid, exchange_info["result"]):
+            mapping[symbol_data["name"].replace("_", "")] = combine_to_hb_trading_pair(
+                base=symbol_data["stock"], quote=symbol_data["money"]
+            )
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
-        params = {
-            "symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        }
+        params = {"symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)}
 
         resp_json = await self._api_request(
-            method=RESTMethod.GET,
-            path_url=CONSTANTS.TICKER_PRICE_CHANGE_PATH_URL,
-            params=params
+            method=RESTMethod.GET, path_url=CONSTANTS.TICKER_PRICE_CHANGE_PATH_URL, params=params
         )
 
         return float(resp_json["lastPrice"])
