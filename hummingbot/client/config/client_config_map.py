@@ -485,7 +485,7 @@ class DBOtherMode(DBMode):
         title = "other_db_engine"
 
     def get_url(self, db_path: str) -> str:
-        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3Dmarket"
 
     @validator("db_engine")
     def validate_db_engine(cls, v: str):
