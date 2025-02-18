@@ -129,7 +129,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.report_management.increase_total_tight_spread_count()
             if self.report_management.interval_tight_spread_count % 5 == 0:
                 notification = "\nWARNING : Tight Spread."
-                notification + f"\nTight spread count: {self.report_management.interval_tight_spread_count}"
+                notification += f"\nTight spread count: {self.report_management.interval_tight_spread_count}"
                 notification += f"\nSpread {bid_ask_spread}"
                 notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
                 self.logger().notify(notification)

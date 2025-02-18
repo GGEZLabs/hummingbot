@@ -75,7 +75,7 @@ class CustomVolumePumperUtils:
             self._current_price_movement = "down"
         order_price = Decimal(
             last_trade_price
-            + self.tick_size * Decimal(randint(-5, 10)) * (1 if self._current_price_movement == "up" else -1)
+            + self.tick_size * Decimal(randint(-2, 5)) * (1 if self._current_price_movement == "up" else -1)
         )
         # adjust order price with random value
         # order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
