@@ -81,9 +81,11 @@ class CexToDexLpPrice(ScriptStrategyBase):
 
         if len(self.active_positions) > 0:
             if self.are_positions_outside_mid_price_range():
-                # remove old positions
-                self.remove_position(self.active_positions[0])
-                return
+                position_proposal = self.create_positions_proposal()
+                self.add_position(position_proposal)
+                # # remove old positions
+                # self.remove_position(self.active_positions[0])
+                # return
 
             self.last_check_time = time.time()
             return
