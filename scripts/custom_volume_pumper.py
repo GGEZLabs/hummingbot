@@ -167,6 +167,9 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.last_trade_price = order_price
             # update total and interval trade data
             self.report_management.add_new_order(order_amount, order_price)
+        else:
+            self.report_management.increase_total_out_of_spread_count()
+            self.logger().info(f"Order price {order_price} is not within spread {best_ask_price} - {best_bid_price}")
 
         # update last mid price timestamp
         self.start_orders_delay()
