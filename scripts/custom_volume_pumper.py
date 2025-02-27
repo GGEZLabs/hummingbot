@@ -232,5 +232,6 @@ class CustomVolumePumper(ScriptStrategyBase):
             f"\nMinimum Ask Bid Spread: {self.minimum_ask_bid_spread_BS} basis points"
             f"\nBalance Loss Threshold: {self.balance_loss_threshold} {self.quote}"
             f"\nPeriodic Report Interval: {self.periodic_report_interval} hour(s)"
+            f"\n\n Current Price Trend : {self.utils._current_price_movement}wards"  # upwards or downwards
         )
         return text + f"\n\n{order_info}\n\n{self.report_management.generate_report()}"
