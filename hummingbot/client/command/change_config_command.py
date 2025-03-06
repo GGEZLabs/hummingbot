@@ -16,7 +16,7 @@ class ChangeConfigCommand:
         commands = raw_command.split(" ")
         command = commands[0]
         if command == "change_script_config":
-            safe_ensure_future(self.change_config(commands))
+            safe_ensure_future(self.change_config(commands), loop=self.ev_loop)
             return True
         else:
             return False
