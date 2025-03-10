@@ -24,6 +24,7 @@ dependencies:
   - tabulate==0.8.9
   - ujson
   - zlib
+  - psycopg2
   - pip:
     - aiohttp==3.*
     - aioprocessing==2.0

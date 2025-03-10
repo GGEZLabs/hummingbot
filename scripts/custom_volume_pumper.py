@@ -126,12 +126,14 @@ class CustomVolumePumper(ScriptStrategyBase):
         # check if spread is too low
         bid_ask_spread = best_ask_price - best_bid_price
         if bid_ask_spread < self.minimum_ask_bid_spread:
-            self.start_orders_delay()
-            notification = "\nWARNING : Tight Spread."
-            notification += f"\nSpread {bid_ask_spread}"
-            notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
-            self.logger().notify(notification)
             self.report_management.increase_total_tight_spread_count()
+            if self.report_management.interval_tight_spread_count % 5 == 0:
+                notification = "\nWARNING : Tight Spread."
+                notification += f"\nTight spread count: {self.report_management.interval_tight_spread_count}"
+                notification += f"\nSpread {bid_ask_spread}"
+                notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+                self.logger().notify(notification)
+            self.start_orders_delay()
             return
 
         # check if last trade price has changed
@@ -165,6 +167,9 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.last_trade_price = order_price
             # update total and interval trade data
             self.report_management.add_new_order(order_amount, order_price)
+        else:
+            self.report_management.increase_total_out_of_spread_count()
+            self.logger().info(f"Order price {order_price} is not within spread {best_ask_price} - {best_bid_price}")
 
         # update last mid price timestamp
         self.start_orders_delay()
@@ -227,5 +232,6 @@ class CustomVolumePumper(ScriptStrategyBase):
             f"\nMinimum Ask Bid Spread: {self.minimum_ask_bid_spread_BS} basis points"
             f"\nBalance Loss Threshold: {self.balance_loss_threshold} {self.quote}"
             f"\nPeriodic Report Interval: {self.periodic_report_interval} hour(s)"
+            f"\n\n Current Price Trend : {self.utils._current_price_movement}wards"  # upwards or downwards
         )
         return text + f"\n\n{order_info}\n\n{self.report_management.generate_report()}"

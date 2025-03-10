@@ -1,4 +1,5 @@
 from .balance_command import BalanceCommand
+from .change_config_command import ChangeConfigCommand
 from .config_command import ConfigCommand
 from .connect_command import ConnectCommand
 from .create_command import CreateCommand
@@ -38,4 +39,5 @@ __all__ = [
     StopCommand,
     TickerCommand,
     MQTTCommand,
+    ChangeConfigCommand
 ]

@@ -481,11 +481,18 @@ class DBOtherMode(DBMode):
         ),
     )
 
+    db_schema: str = Field(
+        default="db_schema",
+        client_data=ClientFieldData(
+            prompt=lambda cm: "Please enter your the name of your DB schema",
+        ),
+    )
+
     class Config:
         title = "other_db_engine"
 
     def get_url(self, db_path: str) -> str:
-        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3Dmarket"
+        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3D{self.db_schema}"
 
     @validator("db_engine")
     def validate_db_engine(cls, v: str):

@@ -1,11 +1,10 @@
 import asyncio
+import math
 from decimal import Decimal
 from itertools import groupby
-import math
-from operator import attrgetter, itemgetter
+from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from async_timeout import timeout
 from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
@@ -21,16 +20,13 @@ from hummingbot.connector.exchange.coinstore.coinstore_api_user_stream_data_sour
 from hummingbot.connector.exchange.coinstore.coinstore_auth import CoinstoreAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
-from hummingbot.connector.utils import TradeFillOrderDetails, combine_to_hb_trading_pair
+from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import DeductedFromReturnsTradeFee, TokenAmount, TradeFeeBase
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
-from hummingbot.core.event.events import MarketEvent, OrderFilledEvent
-from hummingbot.core.utils.async_utils import safe_gather
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
 if TYPE_CHECKING:
@@ -225,7 +221,6 @@ class CoinstoreExchange(ExchangePyBase):
         if cancel_result["data"]["state"] != CONSTANTS.OrderState.CANCELED.name:
             return False
         return True
-
 
     async def cancel_all(self, timeout_seconds: float) -> List[CancellationResult]:
         """
@@ -496,7 +491,7 @@ class CoinstoreExchange(ExchangePyBase):
     async def _get_last_traded_price(self, trading_pair: str) -> float:
         symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
         end_point = f"{CONSTANTS.TICKER_PRICE_PATH_URL};symbol={symbol.upper()}"
-        resp_json = await self._api_get(path_url=end_point)
+        resp_json = await self._api_get(path_url=end_point, limit_id=CONSTANTS.TICKER_PRICE_PATH_URL)
         ticker_data = resp_json["data"][0]
         return float(ticker_data["price"])
 

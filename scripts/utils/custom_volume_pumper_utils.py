@@ -66,19 +66,33 @@ class CustomVolumePumperUtils:
     def calculate_order_price(self) -> Decimal:
         best_ask_price = self.connector.get_price(self.trading_pair, True)
         best_bid_price = self.connector.get_price(self.trading_pair, False)
-        # mid_price = self.connector.get_mid_price(self.trading_pair)
+        mid_price = self.connector.get_mid_price(self.trading_pair)
         last_trade_price = Decimal(self.connector.get_order_book(self.trading_pair).last_trade_price)
+
+        if best_bid_price > last_trade_price or best_ask_price < last_trade_price:
+            last_trade_price = mid_price
+
         bid_distance_percentage = self.distance_from_last_trade_price(best_ask_price, best_bid_price, last_trade_price)
+
         if bid_distance_percentage < 5:
             self._current_price_movement = "up"
         elif bid_distance_percentage > 95:
             self._current_price_movement = "down"
+
         order_price = Decimal(
             last_trade_price
-            + self.tick_size * Decimal(randint(-5, 10)) * (1 if self._current_price_movement == "up" else -1)
+            + self.tick_size * Decimal(randint(-2, 5)) * (1 if self._current_price_movement == "up" else -1)
         )
+
+        if order_price < best_bid_price:
+            order_price = best_bid_price + self.tick_size
+
+        if order_price > best_ask_price:
+            order_price = best_ask_price - self.tick_size
+
         # adjust order price with random value
         # order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
+
         # round to tick size
         order_price = self.round_price_to_tick_size(order_price)
         return best_ask_price, best_bid_price, order_price
