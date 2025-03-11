@@ -126,4 +126,5 @@ RATE_LIMITS = [
     RateLimit(limit_id=OPEN_ORDERS_PATH_URL, limit=10, time_interval=ONE_SECOND),
     RateLimit(limit_id=CREATE_NEW_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
     RateLimit(limit_id=CANCEL_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=TICKERS_PATH_URL, limit=10, time_interval=ONE_SECOND),
 ]
