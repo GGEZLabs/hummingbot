@@ -443,7 +443,7 @@ class CoinstoreExchange(ExchangePyBase):
 
         return order_update
 
-    def sort_by_currency(x):
+    def sort_by_currency(self, x):
         return x["currency"]
 
     async def _update_balances(self):
