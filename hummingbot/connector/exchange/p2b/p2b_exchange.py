@@ -5,20 +5,18 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from bidict import bidict
 
 from hummingbot.connector.constants import s_decimal_NaN
-from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_utils, p2b_web_utils as web_utils
+from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_web_utils as web_utils
 from hummingbot.connector.exchange.p2b.p2b_api_order_book_data_source import P2bAPIOrderBookDataSource
 from hummingbot.connector.exchange.p2b.p2b_api_user_stream_data_source import P2bAPIUserStreamDataSource
 from hummingbot.connector.exchange.p2b.p2b_auth import P2bAuth
 from hummingbot.connector.exchange_py_base import ExchangePyBase
 from hummingbot.connector.trading_rule import TradingRule
-from hummingbot.connector.utils import TradeFillOrderDetails, combine_to_hb_trading_pair
+from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.core.data_type.common import OrderType, TradeType
 from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import DeductedFromReturnsTradeFee, TokenAmount, TradeFeeBase
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
-from hummingbot.core.event.events import MarketEvent, OrderFilledEvent
-from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
@@ -27,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class P2bExchange(ExchangePyBase):
-    UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
+    UPDATE_ORDER_STATUS_MIN_INTERVAL = 1.0
 
     web_utils = web_utils
 
@@ -46,6 +44,8 @@ class P2bExchange(ExchangePyBase):
         self._trading_required = trading_required
         self._trading_pairs = trading_pairs
         self._last_trades_poll_p2b_timestamp = 1.0
+        self._unfilled_or_partially_filled_responses_cache = {}
+
         super().__init__(client_config_map)
 
     @staticmethod
@@ -93,7 +93,7 @@ class P2bExchange(ExchangePyBase):
 
     @property
     def check_network_request_path(self):
-        return CONSTANTS.PING_PATH_URL
+        return CONSTANTS.MARKETS_PATH_URL
 
     @property
     def trading_pairs(self):
@@ -111,8 +111,10 @@ class P2bExchange(ExchangePyBase):
         return [OrderType.LIMIT, OrderType.LIMIT_MAKER, OrderType.MARKET]
 
     async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
-        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKER_BOOK_PATH_URL)
-        return pairs_prices
+        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKERS_PATH_URL)
+        if pairs_prices["success"]:
+            return pairs_prices["result"]
+        return []
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception):
         error_description = str(request_exception)
@@ -177,29 +179,25 @@ class P2bExchange(ExchangePyBase):
         **kwargs,
     ) -> Tuple[str, float]:
         order_result = None
-        amount_str = f"{amount:f}"
-        type_str = P2bExchange.p2b_order_type(order_type)
-        side_str = CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL
-        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        api_params = {
-            "symbol": symbol,
-            "side": side_str,
-            "quantity": amount_str,
-            "type": type_str,
-            "newClientOrderId": order_id,
-        }
-        if order_type is OrderType.LIMIT or order_type is OrderType.LIMIT_MAKER:
-            price_str = f"{price:f}"
-            api_params["price"] = price_str
-        if order_type == OrderType.LIMIT:
-            api_params["timeInForce"] = CONSTANTS.TIME_IN_FORCE_GTC
-
         try:
+            amount_str = f"{amount:f}"
+            price_str = f"{price:f}"
+            side_str = CONSTANTS.SIDE_BUY if trade_type is TradeType.BUY else CONSTANTS.SIDE_SELL
+            symbol = self.get_exchange_trading_pair(trading_pair=trading_pair)
+
+            api_data = {
+                "market": symbol,
+                "side": side_str,
+                "amount": amount_str,
+                "price": price_str,
+            }
+
             order_result = await self._api_post(
-                path_url=CONSTANTS.ORDER_PATH_URL, data=api_params, is_auth_required=True
+                path_url=CONSTANTS.CREATE_NEW_ORDER_PATH_URL, data=api_data, is_auth_required=True
             )
-            o_id = str(order_result["orderId"])
-            transact_time = order_result["transactTime"] * 1e-3
+
+            o_id = str(order_result["result"]["orderId"])
+            transact_time = order_result["result"]["timestamp"]
         except IOError as e:
             error_description = str(e)
             is_server_overloaded = (
@@ -214,58 +212,62 @@ class P2bExchange(ExchangePyBase):
         return o_id, transact_time
 
     async def _place_cancel(self, order_id: str, tracked_order: InFlightOrder):
-        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
-        api_params = {
-            "symbol": symbol,
-            "origClientOrderId": order_id,
-        }
-        cancel_result = await self._api_delete(
-            path_url=CONSTANTS.ORDER_PATH_URL, params=api_params, is_auth_required=True
-        )
-        if cancel_result.get("status") == "CANCELED":
-            return True
-        return False
+
+        try:
+            if tracked_order.exchange_order_id is None:
+                return True
+
+            symbol = self.get_exchange_trading_pair(trading_pair=tracked_order.trading_pair)
+            api_data = {"market": symbol, "orderId": tracked_order.exchange_order_id}
+            cancel_result = await self._api_post(
+                path_url=CONSTANTS.CANCEL_ORDER_PATH_URL, data=api_data, is_auth_required=True
+            )
+
+            # return True if the order is successfully cancelled else False
+            return cancel_result.get("success")
+        # if the order is not found then with status 400 and error code 2020 return True
+        except IOError as e:
+            error_description = str(e)
+            if "status is 400" in error_description and str(CONSTANTS.ORDER_NOT_EXIST_ERROR_CODE) in error_description:
+                return True
+            else:
+                raise e
 
     async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
         """
         Example:
-        {
-            "symbol": "ETHBTC",
-            "baseAssetPrecision": 8,
-            "quotePrecision": 8,
-            "orderTypes": ["LIMIT", "MARKET"],
-            "filters": [
-                {
-                    "filterType": "PRICE_FILTER",
-                    "minPrice": "0.00000100",
-                    "maxPrice": "100000.00000000",
-                    "tickSize": "0.00000100"
-                }, {
-                    "filterType": "LOT_SIZE",
-                    "minQty": "0.00100000",
-                    "maxQty": "100000.00000000",
-                    "stepSize": "0.00100000"
-                }, {
-                    "filterType": "MIN_NOTIONAL",
-                    "minNotional": "0.00100000"
+            {
+            "name": "YFI_BTC",
+            "stock": "YFI",
+            "money": "BTC",
+            "precision": {
+                "money": "4",
+                "stock": "5",
+                "fee": "4"
+            },
+            "limits": {
+                "min_amount": "0.00001",
+                "max_amount": "9000",
+                "step_size": "0.00001",
+                "min_price": "0.0001",
+                "max_price": "100000",
+                "tick_size": "0.0001",
+                "min_total": "0.0001"
                 }
-            ]
-        }
+            }
         """
-        trading_pair_rules = exchange_info_dict.get("symbols", [])
+        trading_pair_rules = exchange_info_dict.get("result", [])
         retval = []
-        for rule in filter(p2b_utils.is_exchange_information_valid, trading_pair_rules):
+        for rule in trading_pair_rules:
             try:
-                trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=rule.get("symbol"))
-                filters = rule.get("filters")
-                price_filter = [f for f in filters if f.get("filterType") == "PRICE_FILTER"][0]
-                lot_size_filter = [f for f in filters if f.get("filterType") == "LOT_SIZE"][0]
-                min_notional_filter = [f for f in filters if f.get("filterType") in ["MIN_NOTIONAL", "NOTIONAL"]][0]
-
-                min_order_size = Decimal(lot_size_filter.get("minQty"))
-                tick_size = price_filter.get("tickSize")
-                step_size = Decimal(lot_size_filter.get("stepSize"))
-                min_notional = Decimal(min_notional_filter.get("minNotional"))
+                trading_pair = await self.trading_pair_associated_to_exchange_symbol(
+                    symbol=self.get_hbot_trading_pair(rule.get("name"))
+                )
+                limits = rule.get("limits")
+                min_order_size = Decimal(limits.get("min_amount"))
+                tick_size = limits.get("tick_size")
+                step_size = Decimal(limits.get("step_size"))
+                min_notional = Decimal(limits.get("min_total"))
 
                 retval.append(
                     TradingRule(
@@ -277,13 +279,9 @@ class P2bExchange(ExchangePyBase):
                     )
                 )
 
-            except Exception:
-                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
+            except Exception as e:
+                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.", e)
         return retval
-
-    async def _status_polling_loop_fetch_updates(self):
-        await self._update_order_fills_from_trades()
-        await super()._status_polling_loop_fetch_updates()
 
     async def _update_trading_fees(self):
         """
@@ -299,7 +297,10 @@ class P2bExchange(ExchangePyBase):
         """
         async for event_message in self._iter_user_event_queue():
             try:
-                event_type = event_message.get("e")
+                if "result" in event_message:
+                    continue
+
+                event_type = event_message.get("method")
                 # Refer to https://github.com/p2b-exchange/p2b-official-api-docs/blob/master/user-data-stream.md
                 # As per the order update section in P2b the ID of the order being canceled is under the "C" key
                 if event_type == "executionReport":
@@ -357,149 +358,168 @@ class P2bExchange(ExchangePyBase):
                 self.logger().error("Unexpected error in user stream listener loop.", exc_info=True)
                 await self._sleep(5.0)
 
-    async def _update_order_fills_from_trades(self):
-        """
-        This is intended to be a backup measure to get filled events with trade ID for orders,
-        in case P2b's user stream events are not working.
-        NOTE: It is not required to copy this functionality in other connectors.
-        This is separated from _update_order_status which only updates the order status without producing filled
-        events, since P2b's get order endpoint does not return trade IDs.
-        The minimum poll interval for order status is 10 seconds.
-        """
-        small_interval_last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
-        small_interval_current_tick = self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
-        long_interval_last_tick = self._last_poll_timestamp / self.LONG_POLL_INTERVAL
-        long_interval_current_tick = self.current_timestamp / self.LONG_POLL_INTERVAL
-
-        if long_interval_current_tick > long_interval_last_tick or (
-            self.in_flight_orders and small_interval_current_tick > small_interval_last_tick
-        ):
-            query_time = int(self._last_trades_poll_p2b_timestamp * 1e3)
-            self._last_trades_poll_p2b_timestamp = self._time_synchronizer.time()
-            order_by_exchange_id_map = {}
-            for order in self._order_tracker.all_fillable_orders.values():
-                order_by_exchange_id_map[order.exchange_order_id] = order
-
-            tasks = []
-            trading_pairs = self.trading_pairs
-            for trading_pair in trading_pairs:
-                params = {"symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)}
-                if self._last_poll_timestamp > 0:
-                    params["startTime"] = query_time
-                tasks.append(self._api_get(path_url=CONSTANTS.MY_TRADES_PATH_URL, params=params, is_auth_required=True))
-
-            self.logger().debug(f"Polling for order fills of {len(tasks)} trading pairs.")
-            results = await safe_gather(*tasks, return_exceptions=True)
-
-            for trades, trading_pair in zip(results, trading_pairs):
-
-                if isinstance(trades, Exception):
-                    self.logger().network(
-                        f"Error fetching trades update for the order {trading_pair}: {trades}.",
-                        app_warning_msg=f"Failed to fetch trade update for {trading_pair}.",
-                    )
-                    continue
-                for trade in trades:
-                    exchange_order_id = str(trade["orderId"])
-                    if exchange_order_id in order_by_exchange_id_map:
-                        # This is a fill for a tracked order
-                        tracked_order = order_by_exchange_id_map[exchange_order_id]
-                        fee = TradeFeeBase.new_spot_fee(
-                            fee_schema=self.trade_fee_schema(),
-                            trade_type=tracked_order.trade_type,
-                            percent_token=trade["commissionAsset"],
-                            flat_fees=[
-                                TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])
-                            ],
-                        )
-                        trade_update = TradeUpdate(
-                            trade_id=str(trade["id"]),
-                            client_order_id=tracked_order.client_order_id,
-                            exchange_order_id=exchange_order_id,
-                            trading_pair=trading_pair,
-                            fee=fee,
-                            fill_base_amount=Decimal(trade["qty"]),
-                            fill_quote_amount=Decimal(trade["quoteQty"]),
-                            fill_price=Decimal(trade["price"]),
-                            fill_timestamp=trade["time"] * 1e-3,
-                        )
-                        self._order_tracker.process_trade_update(trade_update)
-                    elif self.is_confirmed_new_order_filled_event(str(trade["id"]), exchange_order_id, trading_pair):
-                        # This is a fill of an order registered in the DB but not tracked any more
-                        self._current_trade_fills.add(
-                            TradeFillOrderDetails(
-                                market=self.display_name, exchange_trade_id=str(trade["id"]), symbol=trading_pair
-                            )
-                        )
-                        self.trigger_event(
-                            MarketEvent.OrderFilled,
-                            OrderFilledEvent(
-                                timestamp=float(trade["time"]) * 1e-3,
-                                order_id=self._exchange_order_ids.get(str(trade["orderId"]), None),
-                                trading_pair=trading_pair,
-                                trade_type=TradeType.BUY if trade["isBuyer"] else TradeType.SELL,
-                                order_type=OrderType.LIMIT_MAKER if trade["isMaker"] else OrderType.LIMIT,
-                                price=Decimal(trade["price"]),
-                                amount=Decimal(trade["qty"]),
-                                trade_fee=DeductedFromReturnsTradeFee(
-                                    flat_fees=[TokenAmount(trade["commissionAsset"], Decimal(trade["commission"]))]
-                                ),
-                                exchange_trade_id=str(trade["id"]),
-                            ),
-                        )
-                        self.logger().info(f"Recreating missing trade in TradeFill: {trade}")
-
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
         trade_updates = []
 
         if order.exchange_order_id is not None:
             exchange_order_id = int(order.exchange_order_id)
-            trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=order.trading_pair)
-            all_fills_response = await self._api_get(
-                path_url=CONSTANTS.MY_TRADES_PATH_URL,
-                params={"symbol": trading_pair, "orderId": exchange_order_id},
+            trading_pair = self.get_exchange_trading_pair(trading_pair=order.trading_pair)
+
+            # get deal details for the filled order id.
+            filled_orders_response = await self._api_post(
+                path_url=CONSTANTS.ORDER_PATH_URL,
+                data={"orderId": exchange_order_id},
                 is_auth_required=True,
-                limit_id=CONSTANTS.MY_TRADES_PATH_URL,
             )
 
-            for trade in all_fills_response:
-                exchange_order_id = str(trade["orderId"])
-                fee = TradeFeeBase.new_spot_fee(
-                    fee_schema=self.trade_fee_schema(),
-                    trade_type=order.trade_type,
-                    percent_token=trade["commissionAsset"],
-                    flat_fees=[TokenAmount(amount=Decimal(trade["commission"]), token=trade["commissionAsset"])],
-                )
-                trade_update = TradeUpdate(
-                    trade_id=str(trade["id"]),
-                    client_order_id=order.client_order_id,
-                    exchange_order_id=exchange_order_id,
-                    trading_pair=trading_pair,
-                    fee=fee,
-                    fill_base_amount=Decimal(trade["qty"]),
-                    fill_quote_amount=Decimal(trade["quoteQty"]),
-                    fill_price=Decimal(trade["price"]),
-                    fill_timestamp=trade["time"] * 1e-3,
-                )
-                trade_updates.append(trade_update)
+            if "records" in filled_orders_response["result"]:
+                filled_order_deals = filled_orders_response["result"]["records"]
+                if len(filled_order_deals) > 0:
+                    """
+                    {
+                        "id": 12112428585,
+                        "time": 1741081455.015521,
+                        "fee": "0.00180153",
+                        "price": "0.01665",
+                        "amount": "54.1",
+                        "dealOrderId": 256198314826,
+                        "role": 1,
+                        "deal": "0.900765"
+                    },
+                    {
+                        "id": 12112415901,
+                        "time": 1741081348.30054,
+                        "fee": "0.0021978",
+                        "price": "0.01665",
+                        "amount": "66",
+                        "dealOrderId": 256198081697,
+                        "role": 1,
+                        "deal": "1.0989"
+                    }
+                    """
+                    latest_deal = filled_order_deals[-1]
+                    total_fee = Decimal(0)
+                    total_filled_base_amount = Decimal(0)
+                    total_filled_quote_amount = Decimal(0)
+                    for deal in filled_order_deals:
+                        total_fee += Decimal(deal["fee"])
+                        total_filled_base_amount += Decimal(deal["amount"])
+                        total_filled_quote_amount += Decimal(deal["deal"])
+
+                    fee = TradeFeeBase.new_spot_fee(
+                        fee_schema=self.trade_fee_schema(),
+                        trade_type=order.trade_type,
+                        percent_token=str(total_fee),
+                        flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
+                    )
+                    trade_update = TradeUpdate(
+                        trade_id=str(latest_deal["dealOrderId"]),
+                        client_order_id=order.client_order_id,
+                        exchange_order_id=str(exchange_order_id),
+                        trading_pair=trading_pair,
+                        fee=fee,
+                        fill_base_amount=total_filled_base_amount,
+                        fill_quote_amount=total_filled_quote_amount,
+                        fill_price=Decimal(order.price),
+                        fill_timestamp=latest_deal["time"],
+                    )
+                    trade_updates.append(trade_update)
+
+            if len(trade_updates) > 0:
+                return trade_updates
+
+            # Query unfilled or partially filled orders.
+            unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(trading_pair)
+            unfilled_or_partially_filled_orders = unfilled_or_partially_filled_response["result"]
+
+            for trade in unfilled_or_partially_filled_orders:
+                """
+                {
+                    "orderId": 256198053319,
+                    "market": "AUT_USDT",
+                    "price": "0.01665",
+                    "side": "sell",
+                    "type": "limit",
+                    "timestamp": 1741081334.855849,
+                    "dealMoney": "1.0989",
+                    "dealStock": "66",
+                    "amount": "120.1",
+                    "takerFee": "0.002",
+                    "makerFee": "0.002",
+                    "left": "54.1",
+                    "dealFee": "0.0021978",
+                    "clientOrderId": ""
+                 }
+                """
+                if trade["orderId"] == exchange_order_id:
+                    #  the order is not fully filled return the trade details
+                    fee = TradeFeeBase.new_spot_fee(
+                        fee_schema=self.trade_fee_schema(),
+                        trade_type=order.trade_type,
+                        percent_token=trade["takerFee"] if trade["side"] == "buy" else trade["makerFee"],
+                        flat_fees=[TokenAmount(amount=Decimal(trade["dealFee"]), token=order.base_asset)],
+                    )
+                    trade_update = TradeUpdate(
+                        trade_id=str(trade["orderId"]),
+                        client_order_id=order.client_order_id,
+                        exchange_order_id=str(exchange_order_id),
+                        trading_pair=trading_pair,
+                        fee=fee,
+                        fill_base_amount=Decimal(trade["dealStock"]),
+                        fill_quote_amount=Decimal(trade["dealMoney"]),
+                        fill_price=Decimal(trade["price"]),
+                        fill_timestamp=float(trade["timestamp"]),
+                    )
+                    trade_updates.append(trade_update)
 
         return trade_updates
 
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
-        trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=tracked_order.trading_pair)
-        updated_order_data = await self._api_get(
+        if tracked_order.exchange_order_id is None:
+            raise ValueError("Cannot request order status without exchange_order")
+
+        exchange_order_id = int(tracked_order.exchange_order_id)
+        trading_pair = self.get_exchange_trading_pair(trading_pair=tracked_order.trading_pair)
+        new_state = None
+        update_timestamp = None
+
+        # get deal details for the filled order id.
+        filled_orders_response = await self._api_post(
             path_url=CONSTANTS.ORDER_PATH_URL,
-            params={"symbol": trading_pair, "origClientOrderId": tracked_order.client_order_id},
+            data={"orderId": exchange_order_id},
             is_auth_required=True,
         )
+        if "records" in filled_orders_response["result"]:
+            filled_order_deals = filled_orders_response["result"]["records"]
+            if len(filled_order_deals) > 0:
+                # the order is filled
+                filled_order = filled_order_deals[-1]
+                new_state = CONSTANTS.ORDER_STATE["FILLED"]
+                update_timestamp = filled_order["time"]
 
-        new_state = CONSTANTS.ORDER_STATE[updated_order_data["status"]]
+        if new_state is None:
+            # Query unfilled or partially filled orders.
+            unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(trading_pair)
+
+            unfilled_or_partially_filled_orders = unfilled_or_partially_filled_response["result"]
+            for trade in unfilled_or_partially_filled_orders:
+                if trade["orderId"] == exchange_order_id:
+                    if trade["dealMoney"] == "0":
+                        new_state = CONSTANTS.ORDER_STATE["OPEN"]
+                    else:
+                        new_state = CONSTANTS.ORDER_STATE["PARTIALLY_FILLED"]
+                    update_timestamp = trade["timestamp"]
+                    break
+
+        # if not found in the open orders or filled orders then the order is canceled
+        new_state = new_state or CONSTANTS.ORDER_STATE["CANCELED"]
+        update_timestamp = update_timestamp or self.current_timestamp
 
         order_update = OrderUpdate(
             client_order_id=tracked_order.client_order_id,
-            exchange_order_id=str(updated_order_data["orderId"]),
+            exchange_order_id=str(tracked_order.exchange_order_id),
             trading_pair=tracked_order.trading_pair,
-            update_timestamp=updated_order_data["updateTime"] * 1e-3,
+            update_timestamp=update_timestamp,
             new_state=new_state,
         )
 
@@ -510,10 +530,12 @@ class P2bExchange(ExchangePyBase):
         remote_asset_names = set()
         account_info = await self._api_post(path_url=CONSTANTS.BALANCES_PATH_URL, data={}, is_auth_required=True)
         balances = account_info["result"]
-        # TODO filter out zero balances from the response
         for asset_name in balances:
-            free_balance = Decimal(balances[asset_name]['available'])
-            total_balance = Decimal(balances[asset_name]['available']) + Decimal(balances[asset_name]['freeze'])
+            if balances[asset_name]["available"] == "0" and balances[asset_name]["freeze"] == "0":
+                continue
+
+            free_balance = Decimal(balances[asset_name]["available"])
+            total_balance = Decimal(balances[asset_name]["available"]) + Decimal(balances[asset_name]["freeze"])
             self._account_available_balances[asset_name] = free_balance
             self._account_balances[asset_name] = total_balance
             remote_asset_names.add(asset_name)
@@ -525,17 +547,42 @@ class P2bExchange(ExchangePyBase):
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
         mapping = bidict()
-        for symbol_data in filter(p2b_utils.is_exchange_information_valid, exchange_info["result"]):
-            mapping[symbol_data["name"].replace("_", "")] = combine_to_hb_trading_pair(
+        for symbol_data in exchange_info["result"]:
+            mapping[self.get_hbot_trading_pair(symbol_data["name"])] = combine_to_hb_trading_pair(
                 base=symbol_data["stock"], quote=symbol_data["money"]
             )
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
-        params = {"symbol": await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)}
+        params = {"market": self.get_exchange_trading_pair(trading_pair=trading_pair)}
+        resp_json = await self._api_request(method=RESTMethod.GET, path_url=CONSTANTS.TICKER_PATH_URL, params=params)
+        return float(resp_json["result"]["last"])
 
-        resp_json = await self._api_request(
-            method=RESTMethod.GET, path_url=CONSTANTS.TICKER_PRICE_CHANGE_PATH_URL, params=params
-        )
+    def get_exchange_trading_pair(self, trading_pair: str) -> str:
+        return trading_pair.replace("-", "_")
 
-        return float(resp_json["lastPrice"])
+    def get_hbot_trading_pair(self, trading_pair: str) -> str:
+        return trading_pair.replace("_", "")
+
+    async def _get_unfilled_or_partially_filled_response(self, market: str):
+        unfilled_or_partially_filled_response = None
+
+        if self._unfilled_or_partially_filled_responses_cache.get(market) is not None:
+            if (
+                self._unfilled_or_partially_filled_responses_cache[market]["timestamp"]
+                > self.current_timestamp - CONSTANTS.OPEN_ORDERS_CACHE_TIME
+            ):
+                unfilled_or_partially_filled_response = self._unfilled_or_partially_filled_responses_cache[market][
+                    "response"
+                ]
+        if unfilled_or_partially_filled_response is None:
+            unfilled_or_partially_filled_response = await self._api_post(
+                path_url=CONSTANTS.OPEN_ORDERS_PATH_URL,
+                data={"market": market},
+                is_auth_required=True,
+            )
+            self._unfilled_or_partially_filled_responses_cache[market] = {
+                "response": unfilled_or_partially_filled_response,
+                "timestamp": self.current_timestamp,
+            }
+        return unfilled_or_partially_filled_response

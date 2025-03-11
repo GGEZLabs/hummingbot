@@ -1,3 +1,5 @@
+from enum import Enum
+
 from hummingbot.core.api_throttler.data_types import RateLimit
 from hummingbot.core.data_type.in_flight_order import OrderState
 
@@ -22,7 +24,7 @@ DEFAULT_DOMAIN = "com"
 
 # Base URL
 REST_URL = "https://api.p2pb2b.com"
-WSS_URL = "wss://apiws.p2pb2b.ws"
+WSS_URL = "wss://apiws.p2pb2b.com"
 REST_API_NAMESPACE = "api"
 PUBLIC_API_VERSION = "v2"
 PRIVATE_API_VERSION = "v2"
@@ -54,18 +56,28 @@ BALANCES_PATH_URL = "/account/balances"
 BALANCE_PATH_URL = "/account/balance"
 ORDER_HISTORY_PATH_URL = "/account/order_history"
 ORDER_PATH_URL = "/account/order"
-UNEXECUTED_ORDERS_PATH_URL = "/orders"
+OPEN_ORDERS_PATH_URL = "/orders"
 CREATE_NEW_ORDER_PATH_URL = "/order/new"
 CANCEL_ORDER_PATH_URL = "/order/cancel"
 EXECUTED_HISTORY_PATH_URL = "/account/executed_history"
 ALL_EXECUTED_HISTORY_PATH_URL = "/account/executed_history/all"
 
-WS_HEARTBEAT_TIME_INTERVAL = 30
+# cache time
+OPEN_ORDERS_CACHE_TIME = 10
 
+WS_HEARTBEAT_TIME_INTERVAL = 30
+DEPTH_LIMIT = 20
+DEPTH_INTERVAL = "0.0001"
 # P2B params
 
-SIDE_BUY = "BUY"
-SIDE_SELL = "SELL"
+SIDE_BUY = "buy"
+SIDE_SELL = "sell"
+
+
+class OrderRole(Enum):
+    TAKER = 1
+    MAKER = 2
+
 
 TIME_IN_FORCE_GTC = "GTC"  # Good till cancelled
 TIME_IN_FORCE_IOC = "IOC"  # Immediate or cancel
@@ -87,7 +99,7 @@ MAX_REQUEST = 5000
 # Order States
 ORDER_STATE = {
     "PENDING": OrderState.PENDING_CREATE,
-    "NEW": OrderState.OPEN,
+    "OPEN": OrderState.OPEN,
     "FILLED": OrderState.FILLED,
     "PARTIALLY_FILLED": OrderState.PARTIALLY_FILLED,
     "PENDING_CANCEL": OrderState.OPEN,
@@ -97,53 +109,21 @@ ORDER_STATE = {
     "EXPIRED_IN_MATCH": OrderState.FAILED,
 }
 
+
 # Websocket event types
 DIFF_EVENT_TYPE = "depthUpdate"
-TRADE_EVENT_TYPE = "trade"
+DEALS_EVENT_TYPE = "deals"
+DEPTH_EVENT_TYPE = "depth"
+SUBSCRIBE_METHOD = "subscribe"
 
 RATE_LIMITS = [
     # Pools
     RateLimit(limit_id=BALANCES_PATH_URL, limit=10, time_interval=ONE_SECOND),
     RateLimit(limit_id=MARKETS_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    #
-    RateLimit(limit_id=REQUEST_WEIGHT, limit=6000, time_interval=ONE_MINUTE),
-    RateLimit(limit_id=ORDERS, limit=100, time_interval=10 * ONE_SECOND),
-    RateLimit(limit_id=ORDERS_24HR, limit=200000, time_interval=ONE_DAY),
-    RateLimit(limit_id=RAW_REQUESTS, limit=61000, time_interval=5 * ONE_MINUTE),
-    # # Weighted Limits
-    # RateLimit(limit_id=TICKER_PRICE_CHANGE_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 2),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=TICKER_BOOK_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 4),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=PRICES_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 4),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=EXCHANGE_INFO_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 20),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=SNAPSHOT_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 100),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=P2B_USER_STREAM_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 2),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=SERVER_TIME_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=PING_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=ACCOUNTS_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 20),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=MY_TRADES_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #           linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 20),
-    #                          LinkedLimitWeightPair(RAW_REQUESTS, 1)]),
-    # RateLimit(limit_id=ORDER_PATH_URL, limit=MAX_REQUEST, time_interval=ONE_MINUTE,
-    #   linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 4),
-    #                  LinkedLimitWeightPair(ORDERS, 1),
-    #                  LinkedLimitWeightPair(ORDERS_24HR, 1),
-    #                  LinkedLimitWeightPair(RAW_REQUESTS, 1)])
+    RateLimit(limit_id=DEPTH_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=OPEN_ORDERS_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=CREATE_NEW_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=CANCEL_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
 ]

@@ -1,12 +1,10 @@
 import asyncio
-import time
 from typing import TYPE_CHECKING, List, Optional
 
 from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_web_utils as web_utils
 from hummingbot.connector.exchange.p2b.p2b_auth import P2bAuth
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
-from hummingbot.core.utils.async_utils import safe_ensure_future
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod
+from hummingbot.core.web_assistant.connections.data_types import RESTMethod, WSJSONRequest
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 from hummingbot.core.web_assistant.ws_assistant import WSAssistant
 from hummingbot.logger import HummingbotLogger
@@ -22,18 +20,21 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     _logger: Optional[HummingbotLogger] = None
 
-    def __init__(self,
-                 auth: P2bAuth,
-                 trading_pairs: List[str],
-                 connector: 'P2bExchange',
-                 api_factory: WebAssistantsFactory,
-                 domain: str = CONSTANTS.DEFAULT_DOMAIN):
+    def __init__(
+        self,
+        auth: P2bAuth,
+        trading_pairs: List[str],
+        connector: "P2bExchange",
+        api_factory: WebAssistantsFactory,
+        domain: str = CONSTANTS.DEFAULT_DOMAIN,
+    ):
         super().__init__()
         self._auth: P2bAuth = auth
         self._current_listen_key = None
         self._domain = domain
         self._api_factory = api_factory
-
+        self._trading_pairs = trading_pairs
+        self._connector = connector
         self._listen_key_initialized_event: asyncio.Event = asyncio.Event()
         self._last_listen_key_ping_ts = 0
 
@@ -41,11 +42,8 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
         """
         Creates an instance of WSAssistant connected to the exchange
         """
-        self._manage_listen_key_task = safe_ensure_future(self._manage_listen_key_task_loop())
-        await self._listen_key_initialized_event.wait()
-
         ws: WSAssistant = await self._get_ws_assistant()
-        url = f"{CONSTANTS.WSS_URL.format(self._domain)}/{self._current_listen_key}"
+        url = CONSTANTS.WSS_URL
         await ws.connect(ws_url=url, ping_timeout=CONSTANTS.WS_HEARTBEAT_TIME_INTERVAL)
         return ws
 
@@ -55,18 +53,47 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
         P2b does not require any channel subscription.
 
-        :param websocket_assistant: the websocket assistant used to connect to the exchange
+        :param ws: the websocket assistant used to connect to the exchange
         """
-        pass
+        try:
+            symbols = [
+                await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+                for trading_pair in self._trading_pairs
+            ]
+# TODO : THIS wont work p2b ws does not support multiple symbols for DEPTH_EVENT_TYPE
+            for symbol in symbols:
+                order_book_subscribe_payload = {
+                    "method": f"{CONSTANTS.DEPTH_EVENT_TYPE}.{CONSTANTS.SUBSCRIBE_METHOD}",
+                    "params": [symbol, CONSTANTS.DEPTH_LIMIT, CONSTANTS.DEPTH_INTERVAL],
+                    "id": 1,
+                }
+                order_book_subscribe_request: WSJSONRequest = WSJSONRequest(payload=order_book_subscribe_payload)
+                await websocket_assistant.send(order_book_subscribe_request)
+
+            trade_subscribe_payload = {
+                "method": f"{CONSTANTS.DEALS_EVENT_TYPE}.{CONSTANTS.SUBSCRIBE_METHOD}",
+                "params": [f"{symbol}" for symbol in symbols],
+                "id": 2,
+            }
+            trade_subscribe_request: WSJSONRequest = WSJSONRequest(payload=trade_subscribe_payload)
+            await websocket_assistant.send(trade_subscribe_request)
+
+            self.logger().info("Subscribed to public order book and trade channels...")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.logger().error(
+                "Unexpected error occurred subscribing to order book trading and delta streams...", exc_info=True
+            )
+            raise
 
     async def _get_listen_key(self):
         rest_assistant = await self._api_factory.get_rest_assistant()
         try:
             data = await rest_assistant.execute_request(
-                url=web_utils.public_rest_url(path_url=CONSTANTS.p2b_USER_STREAM_PATH_URL, domain=self._domain),
+                url=web_utils.public_rest_url(path_url=CONSTANTS.WSS_URL, domain=self._domain),
                 method=RESTMethod.POST,
-                throttler_limit_id=CONSTANTS.p2b_USER_STREAM_PATH_URL,
-                headers=self._auth.header_for_authentication()
+                throttler_limit_id=CONSTANTS.WSS_URL,
             )
         except asyncio.CancelledError:
             raise
@@ -79,12 +106,11 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
         rest_assistant = await self._api_factory.get_rest_assistant()
         try:
             data = await rest_assistant.execute_request(
-                url=web_utils.public_rest_url(path_url=CONSTANTS.p2b_USER_STREAM_PATH_URL, domain=self._domain),
+                url=web_utils.public_rest_url(path_url=CONSTANTS.WSS_URL, domain=self._domain),
                 params={"listenKey": self._current_listen_key},
                 method=RESTMethod.PUT,
                 return_err=True,
-                throttler_limit_id=CONSTANTS.p2b_USER_STREAM_PATH_URL,
-                headers=self._auth.header_for_authentication()
+                throttler_limit_id=CONSTANTS.WSS_URL,
             )
 
             if "code" in data:
@@ -99,30 +125,6 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
         return True
 
-    async def _manage_listen_key_task_loop(self):
-        try:
-            while True:
-                now = int(time.time())
-                if self._current_listen_key is None:
-                    self._current_listen_key = await self._get_listen_key()
-                    self.logger().info(f"Successfully obtained listen key {self._current_listen_key}")
-                    self._listen_key_initialized_event.set()
-                    self._last_listen_key_ping_ts = int(time.time())
-
-                if now - self._last_listen_key_ping_ts >= self.LISTEN_KEY_KEEP_ALIVE_INTERVAL:
-                    success: bool = await self._ping_listen_key()
-                    if not success:
-                        self.logger().error("Error occurred renewing listen key ...")
-                        break
-                    else:
-                        self.logger().info(f"Refreshed listen key {self._current_listen_key}.")
-                        self._last_listen_key_ping_ts = int(time.time())
-                else:
-                    await self._sleep(self.LISTEN_KEY_KEEP_ALIVE_INTERVAL)
-        finally:
-            self._current_listen_key = None
-            self._listen_key_initialized_event.clear()
-
     async def _get_ws_assistant(self) -> WSAssistant:
         if self._ws_assistant is None:
             self._ws_assistant = await self._api_factory.get_ws_assistant()
@@ -130,7 +132,7 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     async def _on_user_stream_interruption(self, websocket_assistant: Optional[WSAssistant]):
         await super()._on_user_stream_interruption(websocket_assistant=websocket_assistant)
-        self._manage_listen_key_task and self._manage_listen_key_task.cancel()
+        # self._manage_listen_key_task and self._manage_listen_key_task.cancel()
         self._current_listen_key = None
         self._listen_key_initialized_event.clear()
         await self._sleep(5)

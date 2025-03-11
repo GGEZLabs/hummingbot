@@ -1,5 +1,4 @@
 from decimal import Decimal
-from typing import Any, Dict
 
 from pydantic import Field, SecretStr
 
@@ -14,28 +13,6 @@ DEFAULT_FEES = TradeFeeSchema(
     taker_percent_fee_decimal=Decimal("0.001"),
     buy_percent_fee_deducted_from_returns=True,
 )
-
-
-def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
-    """
-    Verifies if a trading pair is enabled to operate with based on its exchange information
-    :param exchange_info: the exchange information for a trading pair
-    :return: True if the trading pair is enabled, False otherwise
-    """
-    # is_spot = False
-    # is_trading = False
-
-    # if exchange_info.get("status", None) == "TRADING":
-    #     is_trading = True
-
-    # permissions_sets = exchange_info.get("permissionSets", list())
-    # for permission_set in permissions_sets:
-    #     # PermissionSet is a list, find if in this list we have "SPOT" value or not
-    #     if "SPOT" in permission_set:
-    #         is_spot = True
-    #         break
-
-    return True
 
 
 class P2bConfigMap(BaseConnectorConfigMap):
