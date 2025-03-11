@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class CoinstoreExchange(ExchangePyBase):
-    UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
+    UPDATE_ORDER_STATUS_MIN_INTERVAL = 1.0
 
     web_utils = web_utils
 
@@ -119,7 +119,9 @@ class CoinstoreExchange(ExchangePyBase):
 
     async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
         pairs_prices = await self._api_get(path_url=CONSTANTS.TICKER_BOOK_PATH_URL)
-        return pairs_prices
+        if pairs_prices["code"] == CONSTANTS.API_SUCCESS_CODE:
+            return pairs_prices["data"]
+        return []
 
     def _is_request_exception_related_to_time_synchronizer(self, request_exception: Exception):
         error_description = str(request_exception)
@@ -394,7 +396,7 @@ class CoinstoreExchange(ExchangePyBase):
                         trade_type=order.trade_type,
                         percent=Decimal(trade["acturalFeeRate"]),
                         percent_token=trade["acturalFeeRate"],
-                        flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=trade[order.base_asset])],
+                        flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=order.base_asset)],
                     )
                     price = Decimal(trade["execAmt"]) / Decimal(trade["execQty"])
                     trade_update = TradeUpdate(
@@ -441,6 +443,9 @@ class CoinstoreExchange(ExchangePyBase):
 
         return order_update
 
+    def sort_by_currency(x):
+        return x["currency"]
+
     async def _update_balances(self):
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
@@ -448,9 +453,10 @@ class CoinstoreExchange(ExchangePyBase):
         account_info = await self._api_post(path_url=CONSTANTS.ACCOUNTS_PATH_URL, is_auth_required=True, data={})
         balances = account_info["data"]
 
-        sortFunction = lambda x: x["currency"]
-        frozen_balances = sorted([balance for balance in balances if balance["type"] == 4], key=sortFunction)
-        available_balances = sorted([balance for balance in balances if balance["type"] == 1], key=sortFunction)
+        frozen_balances = sorted([balance for balance in balances if balance["type"] == 4], key=self.sort_by_currency)
+        available_balances = sorted(
+            [balance for balance in balances if balance["type"] == 1], key=self.sort_by_currency
+        )
 
         for available_balance, frozen_balance in zip(available_balances, frozen_balances):
             asset_name = available_balance["currency"]

@@ -1,6 +1,4 @@
 from hummingbot.core.api_throttler.data_types import LinkedLimitWeightPair, RateLimit
-from enum import Enum
-
 from hummingbot.core.data_type.common import OrderType
 from hummingbot.core.data_type.in_flight_order import OrderState
 
@@ -29,7 +27,7 @@ REST_ORDER_INFO = "/v2/trade/order/orderInfo"
 
 
 TICKER_PRICE_PATH_URL = "/v1/ticker/price"
-TICKER_BOOK_PATH_URL = "/v1/market/trade/"  # ticker book latest traded price
+TICKER_BOOK_PATH_URL = "/v1/market/tickers"  # ticker book latest traded price
 MY_TRADES_PATH_URL = "/trade/match/accountMatches"
 SNAPSHOT_PATH_URL = REST_DEPTH  # order book
 ORDER_INFO_PATH_URL = REST_ORDER_INFO

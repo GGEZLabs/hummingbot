@@ -878,6 +878,17 @@ class P2bRateSourceMode(ExchangeRateSourceModeBase):
         title = "p2b"
 
 
+class CoinstoreRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(
+        default="coinstore",
+        const=True,
+        client_data=None,
+    )
+
+    class Config:
+        title = "coinstore"
+
+
 class CoinbaseAdvancedTradeRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(
         default="coinbase_advanced_trade",
@@ -912,7 +923,8 @@ RATE_SOURCE_MODES = {
     CoinbaseAdvancedTradeRateSourceMode.Config.title: CoinbaseAdvancedTradeRateSourceMode,
     CubeRateSourceMode.Config.title: CubeRateSourceMode,
     HyperliquidRateSourceMode.Config.title: HyperliquidRateSourceMode,
-    P2bRateSourceMode.Config.title: P2bRateSourceMode
+    P2bRateSourceMode.Config.title: P2bRateSourceMode,
+    CoinstoreRateSourceMode.Config.title: CoinstoreRateSourceMode,
 }
 
 
