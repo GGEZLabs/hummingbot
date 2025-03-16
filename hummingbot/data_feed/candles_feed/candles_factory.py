@@ -21,12 +21,14 @@ from hummingbot.data_feed.candles_feed.mexc_perpetual_candles.mexc_perpetual_can
 from hummingbot.data_feed.candles_feed.mexc_spot_candles.mexc_spot_candles import MexcSpotCandles
 from hummingbot.data_feed.candles_feed.okx_perpetual_candles.okx_perpetual_candles import OKXPerpetualCandles
 from hummingbot.data_feed.candles_feed.okx_spot_candles.okx_spot_candles import OKXSpotCandles
+from hummingbot.data_feed.candles_feed.p2b_spot_candles.p2b_spot_candles import P2bSpotCandles
 
 
 class UnsupportedConnectorException(Exception):
     """
     Exception raised when an unsupported connector is requested.
     """
+
     def __init__(self, connector: str):
         message = f"The connector {connector} is not available. Please select another one."
         super().__init__(message)
@@ -37,6 +39,7 @@ class CandlesFactory:
     The CandlesFactory class creates and returns a Candle object based on the specified configuration.
     It uses a mapping of connector names to their respective candle classes.
     """
+
     _candles_map: Dict[str, Type[CandlesBase]] = {
         "binance_perpetual": BinancePerpetualCandles,
         "binance": BinanceSpotCandles,
@@ -55,6 +58,7 @@ class CandlesFactory:
         "hyperliquid": HyperliquidSpotCandles,
         "hyperliquid_perpetual": HyperliquidPerpetualCandles,
         "coinstore": CoinstoreSpotCandles,
+        "p2b": P2bSpotCandles,
     }
 
     @classmethod
@@ -68,10 +72,6 @@ class CandlesFactory:
         """
         connector_class = cls._candles_map.get(candles_config.connector)
         if connector_class:
-            return connector_class(
-                candles_config.trading_pair,
-                candles_config.interval,
-                candles_config.max_records
-            )
+            return connector_class(candles_config.trading_pair, candles_config.interval, candles_config.max_records)
         else:
             raise UnsupportedConnectorException(candles_config.connector)
