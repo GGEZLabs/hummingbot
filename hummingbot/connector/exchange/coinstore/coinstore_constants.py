@@ -58,6 +58,8 @@ LOCALE = "Locale="
 
 RAW_REQUESTS = "RAW_REQUESTS"
 REQUEST_WEIGHT = "REQUEST_WEIGHT"
+MAX_REQUEST = 40
+
 WS_SUBSCRIBE = "WSSubscribe"
 WS_HEARTBEAT_TIME_INTERVAL = 30
 
@@ -65,34 +67,117 @@ ONE_SECOND = 1
 
 
 RATE_LIMITS = [
-    RateLimit(limit_id=REQUEST_WEIGHT, limit=120, time_interval=60 * ONE_SECOND),
-    RateLimit(limit_id=ACCOUNTS_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=MY_TRADES_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=ORDER_INFO_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=REST_CREATE_ORDER, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=TICKER_PRICE_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=ACCOUNT_MATCHES_TRADE, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=REST_CANCEL_ORDER, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=REST_CANCEL_BATCH_ORDERS, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=TICKER_BOOK_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=EXCHANGE_INFO_PATH_URL, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=WS_SUBSCRIBE, limit=120, time_interval=3 * ONE_SECOND),
-    RateLimit(limit_id=RAW_REQUESTS, limit=120, time_interval=5 * 60 * ONE_SECOND),
+    # Pools
+    RateLimit(limit_id=RAW_REQUESTS, limit=MAX_REQUEST, time_interval=ONE_SECOND),
+    RateLimit(limit_id=REQUEST_WEIGHT, limit=MAX_REQUEST, time_interval=ONE_SECOND),
+    # Weighted Limits
     RateLimit(
-        limit_id=SNAPSHOT_PATH_URL,
-        limit=120,
-        time_interval=60 * ONE_SECOND,
+        limit_id=ACCOUNTS_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 4),
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
             LinkedLimitWeightPair(RAW_REQUESTS, 1),
         ],
     ),
     RateLimit(
-        limit_id=RAW_REQUESTS,
-        limit=120,
-        time_interval=3 * ONE_SECOND,
-        linked_limits=[LinkedLimitWeightPair(REQUEST_WEIGHT, 2), LinkedLimitWeightPair(RAW_REQUESTS, 1)],
-        weight=1,
+        limit_id=MY_TRADES_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=ORDER_INFO_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CREATE_ORDER,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=TICKER_PRICE_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=ACCOUNT_MATCHES_TRADE,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CANCEL_ORDER,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CANCEL_BATCH_ORDERS,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=TICKER_BOOK_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=EXCHANGE_INFO_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=WS_SUBSCRIBE,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=SNAPSHOT_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
     ),
 ]
 
