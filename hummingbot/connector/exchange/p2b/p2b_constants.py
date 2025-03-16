@@ -1,6 +1,6 @@
 from enum import Enum
 
-from hummingbot.core.api_throttler.data_types import RateLimit
+from hummingbot.core.api_throttler.data_types import LinkedLimitWeightPair, RateLimit
 from hummingbot.core.data_type.in_flight_order import OrderState
 
 EXCHANGE_NAME = "P2B"
@@ -90,11 +90,9 @@ ORDERS_24HR = "ORDERS_24HR"
 RAW_REQUESTS = "RAW_REQUESTS"
 
 # Rate Limit time intervals
-ONE_MINUTE = 60
+MAX_REQUEST = 10
 ONE_SECOND = 1
-ONE_DAY = 86400
 
-MAX_REQUEST = 5000
 
 # Order States
 ORDER_STATE = {
@@ -116,16 +114,98 @@ DEALS_EVENT_TYPE = "deals"
 DEPTH_EVENT_TYPE = "depth"
 SUBSCRIBE_METHOD = "subscribe"
 
+
 RATE_LIMITS = [
     # Pools
-    RateLimit(limit_id=BALANCES_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=MARKETS_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=DEPTH_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=OPEN_ORDERS_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=CREATE_NEW_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=CANCEL_ORDER_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=TICKERS_PATH_URL, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=TICKER_PATH_URL, limit=10, time_interval=ONE_SECOND),
+    RateLimit(
+        limit_id=BALANCES_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=MARKETS_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=DEPTH_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=ORDER_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=ORDER_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=OPEN_ORDERS_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=CREATE_NEW_ORDER_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=CANCEL_ORDER_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=TICKERS_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    RateLimit(
+        limit_id=TICKER_PATH_URL,
+        limit=MAX_REQUEST,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+        ],
+    ),
+    # Weighted Limits
 ]
