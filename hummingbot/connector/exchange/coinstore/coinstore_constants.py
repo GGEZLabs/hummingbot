@@ -57,7 +57,6 @@ COOKIE = "Cookie"
 LOCALE = "Locale="
 
 RAW_REQUESTS = "RAW_REQUESTS"
-REQUEST_WEIGHT = "REQUEST_WEIGHT"
 MAX_REQUEST = 40
 
 WS_SUBSCRIBE = "WSSubscribe"
@@ -69,15 +68,13 @@ ONE_SECOND = 1
 RATE_LIMITS = [
     # Pools
     RateLimit(limit_id=RAW_REQUESTS, limit=MAX_REQUEST, time_interval=ONE_SECOND),
-    RateLimit(limit_id=REQUEST_WEIGHT, limit=MAX_REQUEST, time_interval=ONE_SECOND),
     # Weighted Limits
     RateLimit(
         limit_id=ACCOUNTS_PATH_URL,
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -85,8 +82,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -94,8 +90,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -103,8 +98,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -112,8 +106,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -121,8 +114,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -130,8 +122,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -139,8 +130,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -148,8 +138,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -157,8 +146,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -166,8 +154,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
@@ -175,8 +162,7 @@ RATE_LIMITS = [
         limit=MAX_REQUEST,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
 ]
