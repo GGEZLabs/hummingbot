@@ -84,13 +84,12 @@ TIME_IN_FORCE_IOC = "IOC"  # Immediate or cancel
 TIME_IN_FORCE_FOK = "FOK"  # Fill or kill
 
 # Rate Limit Type
-REQUEST_WEIGHT = "REQUEST_WEIGHT"
 ORDERS = "ORDERS"
 ORDERS_24HR = "ORDERS_24HR"
 RAW_REQUESTS = "RAW_REQUESTS"
 
 # Rate Limit time intervals
-MAX_REQUEST = 10
+MAX_REQUESTS_PER_SECOND = 10
 ONE_SECOND = 1
 
 
@@ -117,95 +116,86 @@ SUBSCRIBE_METHOD = "subscribe"
 
 RATE_LIMITS = [
     # Pools
+    RateLimit(limit_id=RAW_REQUESTS, limit=MAX_REQUESTS_PER_SECOND, time_interval=ONE_SECOND),
+    # Weighted Limits
     RateLimit(
         limit_id=BALANCES_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=MARKETS_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=DEPTH_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=ORDER_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=ORDER_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=OPEN_ORDERS_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=CREATE_NEW_ORDER_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=CANCEL_ORDER_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=TICKERS_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
     RateLimit(
         limit_id=TICKER_PATH_URL,
-        limit=MAX_REQUEST,
+        limit=MAX_REQUESTS_PER_SECOND,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(REQUEST_WEIGHT, 1),
-            LinkedLimitWeightPair(RAW_REQUESTS, 1),
+            LinkedLimitWeightPair(RAW_REQUESTS),
         ],
     ),
-    # Weighted Limits
 ]
