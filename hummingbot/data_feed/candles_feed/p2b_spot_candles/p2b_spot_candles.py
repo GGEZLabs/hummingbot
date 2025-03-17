@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 from typing import List, Optional
 
@@ -82,7 +83,7 @@ class P2bSpotCandles(CandlesBase):
         if start_time:
             time_now = int(time.time())
             interval = CONSTANTS.INTERVALS_IN_SECONDS[self.interval]
-            num_of_intervals = (time_now - start_time) // interval
+            num_of_intervals = math.ceil((time_now - start_time) / interval)
             params["offset"] = 0 if limit > num_of_intervals else num_of_intervals - limit
         return params
 
