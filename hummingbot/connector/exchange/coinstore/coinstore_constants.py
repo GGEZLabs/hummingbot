@@ -56,113 +56,126 @@ ACEEPT = "Accept"
 COOKIE = "Cookie"
 LOCALE = "Locale="
 
-RAW_REQUESTS = "RAW_REQUESTS"
-MAX_REQUEST = 40
+SAME_IP_REQUESTS_ID = "SAME_IP_REQUESTS"
+SAME_USER_REQUESTS_ID = "SAME_USER_REQUESTS"
+
+SAME_IP_REQUEST_LIMIT = 300
+SAME_USER_REQUEST_LIMIT = 120
 
 WS_SUBSCRIBE = "WSSubscribe"
 WS_HEARTBEAT_TIME_INTERVAL = 30
 
 ONE_SECOND = 1
-
+THREE_SECONDS = 3
+TIME_INTERVAL = 2
 
 RATE_LIMITS = [
     # Pools
-    RateLimit(limit_id=RAW_REQUESTS, limit=MAX_REQUEST, time_interval=ONE_SECOND),
+    RateLimit(limit_id=SAME_IP_REQUESTS_ID, limit=SAME_IP_REQUEST_LIMIT, time_interval=THREE_SECONDS),
+    RateLimit(limit_id=SAME_USER_REQUESTS_ID, limit=SAME_USER_REQUEST_LIMIT, time_interval=THREE_SECONDS),
     # Weighted Limits
-    RateLimit(
-        limit_id=ACCOUNTS_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=MY_TRADES_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
+    # Public Endpoints
     RateLimit(
         limit_id=ORDER_INFO_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=REST_CREATE_ORDER,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
         ],
     ),
     RateLimit(
         limit_id=TICKER_PRICE_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=ACCOUNT_MATCHES_TRADE,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=REST_CANCEL_ORDER,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=REST_CANCEL_BATCH_ORDERS,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
         ],
     ),
     RateLimit(
         limit_id=TICKER_BOOK_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
         ],
     ),
     RateLimit(
         limit_id=EXCHANGE_INFO_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
         ],
     ),
     RateLimit(
         limit_id=WS_SUBSCRIBE,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
         ],
     ),
     RateLimit(
         limit_id=SNAPSHOT_PATH_URL,
-        limit=MAX_REQUEST,
-        time_interval=ONE_SECOND,
+        limit=SAME_IP_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+        ],
+    ),
+    # Private Endpoints
+    RateLimit(
+        limit_id=ACCOUNTS_PATH_URL,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
+        ],
+    ),
+    RateLimit(
+        limit_id=MY_TRADES_PATH_URL,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CREATE_ORDER,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
+        ],
+    ),
+    RateLimit(
+        limit_id=ACCOUNT_MATCHES_TRADE,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CANCEL_ORDER,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
+        ],
+    ),
+    RateLimit(
+        limit_id=REST_CANCEL_BATCH_ORDERS,
+        limit=SAME_USER_REQUEST_LIMIT,
+        time_interval=THREE_SECONDS,
+        linked_limits=[
+            LinkedLimitWeightPair(SAME_IP_REQUESTS_ID),
+            LinkedLimitWeightPair(SAME_USER_REQUESTS_ID),
         ],
     ),
 ]
