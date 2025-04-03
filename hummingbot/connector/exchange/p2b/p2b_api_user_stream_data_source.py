@@ -1,10 +1,10 @@
 import asyncio
 from typing import TYPE_CHECKING, List, Optional
 
-from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS, p2b_web_utils as web_utils
+from hummingbot.connector.exchange.p2b import p2b_constants as CONSTANTS
 from hummingbot.connector.exchange.p2b.p2b_auth import P2bAuth
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod, WSJSONRequest
+from hummingbot.core.web_assistant.connections.data_types import WSJSONRequest
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 from hummingbot.core.web_assistant.ws_assistant import WSAssistant
 from hummingbot.logger import HummingbotLogger
@@ -60,7 +60,7 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
                 await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
                 for trading_pair in self._trading_pairs
             ]
-# TODO : THIS wont work p2b ws does not support multiple symbols for DEPTH_EVENT_TYPE
+            # TODO : THIS wont work p2b ws does not support multiple symbols for DEPTH_EVENT_TYPE
             for symbol in symbols:
                 order_book_subscribe_payload = {
                     "method": f"{CONSTANTS.DEPTH_EVENT_TYPE}.{CONSTANTS.SUBSCRIBE_METHOD}",
@@ -87,52 +87,7 @@ class P2bAPIUserStreamDataSource(UserStreamTrackerDataSource):
             )
             raise
 
-    async def _get_listen_key(self):
-        rest_assistant = await self._api_factory.get_rest_assistant()
-        try:
-            data = await rest_assistant.execute_request(
-                url=web_utils.public_rest_url(path_url=CONSTANTS.WSS_URL, domain=self._domain),
-                method=RESTMethod.POST,
-                throttler_limit_id=CONSTANTS.WSS_URL,
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception as exception:
-            raise IOError(f"Error fetching user stream listen key. Error: {exception}")
-
-        return data["listenKey"]
-
-    async def _ping_listen_key(self) -> bool:
-        rest_assistant = await self._api_factory.get_rest_assistant()
-        try:
-            data = await rest_assistant.execute_request(
-                url=web_utils.public_rest_url(path_url=CONSTANTS.WSS_URL, domain=self._domain),
-                params={"listenKey": self._current_listen_key},
-                method=RESTMethod.PUT,
-                return_err=True,
-                throttler_limit_id=CONSTANTS.WSS_URL,
-            )
-
-            if "code" in data:
-                self.logger().warning(f"Failed to refresh the listen key {self._current_listen_key}: {data}")
-                return False
-
-        except asyncio.CancelledError:
-            raise
-        except Exception as exception:
-            self.logger().warning(f"Failed to refresh the listen key {self._current_listen_key}: {exception}")
-            return False
-
-        return True
-
     async def _get_ws_assistant(self) -> WSAssistant:
         if self._ws_assistant is None:
             self._ws_assistant = await self._api_factory.get_ws_assistant()
         return self._ws_assistant
-
-    async def _on_user_stream_interruption(self, websocket_assistant: Optional[WSAssistant]):
-        await super()._on_user_stream_interruption(websocket_assistant=websocket_assistant)
-        # self._manage_listen_key_task and self._manage_listen_key_task.cancel()
-        self._current_listen_key = None
-        self._listen_key_initialized_event.clear()
-        await self._sleep(5)
