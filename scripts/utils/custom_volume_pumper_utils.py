@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 from decimal import Decimal
 from random import randint
 
@@ -31,6 +32,7 @@ class CustomVolumePumperUtils:
     def adjust_order_amount_for_balance(
         self, order_price: Decimal, order_amount: Decimal, balance: pd.DataFrame
     ) -> Decimal:
+        new_order_amount = deepcopy(order_amount)
         quote_balance = Decimal(
             balance.loc[
                 (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.quote), "Available Balance"
@@ -43,12 +45,12 @@ class CustomVolumePumperUtils:
         )
 
         if quote_balance < order_amount * order_price:
-            order_amount = math.floor(quote_balance / order_price)
+            new_order_amount = math.floor(quote_balance / order_price)
 
         if base_balance < order_amount:
-            order_amount = base_balance
+            new_order_amount = base_balance
 
-        return order_amount
+        return new_order_amount
 
     def convert_from_basis_point(self, basis_point):
         return basis_point / 10000
@@ -68,7 +70,6 @@ class CustomVolumePumperUtils:
         best_bid_price = self.connector.get_price(self.trading_pair, False)
         mid_price = self.connector.get_mid_price(self.trading_pair)
         last_trade_price = Decimal(self.connector.get_order_book(self.trading_pair).last_trade_price)
-
         if best_bid_price > last_trade_price or best_ask_price < last_trade_price:
             last_trade_price = mid_price
 

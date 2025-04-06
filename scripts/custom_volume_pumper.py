@@ -1,5 +1,6 @@
 import time
 from decimal import Decimal
+from enum import Enum
 from random import randint
 from typing import Dict
 
@@ -12,6 +13,13 @@ from scripts.utils.custom_volume_pumper_config import CustomVolumePumperConfig
 from scripts.utils.custom_volume_pumper_utils import CustomVolumePumperUtils
 from scripts.utils.report_management import ReportManagement
 from scripts.utils.risk_management import RiskManagement
+
+
+class CustomVolumePumperStatus(Enum):
+    NOT_INITIALIZED = 0
+    RUNNING = 1
+    STOPPED = 2
+    UNDERBALANCED = 3
 
 
 class CustomVolumePumper(ScriptStrategyBase):
@@ -35,7 +43,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.price_source = PriceType.MidPrice
         self.last_mid_price_timestamp = time.time()
         self.random_delay = 0
-        self.status = "NOT_INITIALIZED"
+        self.status = CustomVolumePumperStatus.NOT_INITIALIZED
 
     @property
     def connector(self) -> ConnectorBase:
@@ -55,7 +63,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.base, self.quote = split_hb_trading_pair(self.trading_pair)
         self.last_trade_price = self.connector.get_order_book(self.trading_pair).last_trade_price
         self.starting_balance = self.get_balance_df()
-        self.status = "RUNNING"
+        self.status = CustomVolumePumperStatus.RUNNING
         # risk management
         self.risk_management = RiskManagement(
             balance_loss_threshold=self.balance_loss_threshold,
@@ -82,16 +90,19 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.minimum_ask_bid_spread = self.utils.convert_from_basis_point(self.minimum_ask_bid_spread_BS)
 
     def on_tick(self):
-        if self.status == "NOT_INITIALIZED":
+        if self.status == CustomVolumePumperStatus.NOT_INITIALIZED:
             self.init_strategy()
 
-        if self.status == "STOPPED":
+        if self.status == CustomVolumePumperStatus.STOPPED:
             # check if balance return to the starting balance
             if self.risk_management.check_balance_returned(current_balance=self.get_balance_df()):
                 notification = "\nNOTIFICATION : Balance has returned to starting balance.\nResuming strategy."
                 self.logger().notify(notification)
-                self.status = "RUNNING"
+                self.status = CustomVolumePumperStatus.RUNNING
 
+            return
+
+        if self.status == CustomVolumePumperStatus.UNDERBALANCED:
             return
 
         #  cancel all orders active orders
@@ -117,7 +128,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.logger().notify(stop_loss_notification)
             self.cancel_all_orders()
             self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
-            self.status = "STOPPED"
+            self.status = CustomVolumePumperStatus.STOPPED
             return
 
         # calculate order price
@@ -156,17 +167,33 @@ class CustomVolumePumper(ScriptStrategyBase):
             order_amount = randint(self.order_lower_amount, self.order_upper_amount)  # in base (GGEZ1)
 
             # check if we have enough balance to place order
-            order_amount = self.utils.adjust_order_amount_for_balance(order_price, order_amount, self.get_balance_df())
+            adjusted_order_amount = self.utils.adjust_order_amount_for_balance(
+                order_price, order_amount, self.get_balance_df()
+            )
+            if adjusted_order_amount < self.order_lower_amount:
+                notification = (
+                    f"\nNOTIFICATION : Stopping strategy initiated"
+                    "\nBalance is not enough to place order."
+                    "\nPlease Increase Your Balance, Then Restart The Bot."
+                    f"\nOrder amount: {order_amount}"
+                    f"\nAdjusted order amount: {adjusted_order_amount}"
+                    f"\nMinimum order amount: {self.order_lower_amount}"
+                    f"\nBalance: {self.get_balance_df()}"
+                    f"\nOrder Price: {order_price}"
+                )
+                self.status = CustomVolumePumperStatus.UNDERBALANCED
+                self.logger().notify(notification)
+                return
 
             # create order proposals and place them
-            sell_order_proposal = self.generate_order_candidate(order_price, order_amount, False)
+            sell_order_proposal = self.generate_order_candidate(order_price, adjusted_order_amount, False)
             self.place_order(self.exchange, sell_order_proposal)
 
-            buy_order_proposal = self.generate_order_candidate(order_price, order_amount, True)
+            buy_order_proposal = self.generate_order_candidate(order_price, adjusted_order_amount, True)
             self.place_order(self.exchange, buy_order_proposal)
             self.last_trade_price = order_price
             # update total and interval trade data
-            self.report_management.add_new_order(order_amount, order_price)
+            self.report_management.add_new_order(adjusted_order_amount, order_price)
         else:
             self.report_management.increase_total_out_of_spread_count()
             self.logger().info(f"Order price {order_price} is not within spread {best_ask_price} - {best_bid_price}")
@@ -225,7 +252,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         text = super().format_status()
         order_info = (
             f"\nStrategy Config :"
-            f"\nBot Status: {self.status}"
+            f"\nBot Status: {self.status.name}"
             f"\nExchange: {self.exchange} Trading Pair: {self.trading_pair}"
             f"\nOrder Amount Range: {self.order_lower_amount} - {self.order_upper_amount} {self.base}"
             f"\nDelay Order Time: {self.delay_order_time} seconds + Random Delay: 0 - {self.max_random_delay} seconds"
