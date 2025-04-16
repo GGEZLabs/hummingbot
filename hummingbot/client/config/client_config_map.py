@@ -936,6 +936,7 @@ RATE_SOURCE_MODES = {
     HyperliquidRateSourceMode.Config.title: HyperliquidRateSourceMode,
     P2bRateSourceMode.Config.title: P2bRateSourceMode,
     CoinstoreRateSourceMode.Config.title: CoinstoreRateSourceMode,
+    UzxRateSourceMode.Config.title: UzxRateSourceMode,
 }
 
 
