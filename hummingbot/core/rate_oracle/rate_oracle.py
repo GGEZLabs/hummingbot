@@ -21,6 +21,7 @@ from hummingbot.core.rate_oracle.sources.hyperliquid_rate_source import Hyperliq
 from hummingbot.core.rate_oracle.sources.kucoin_rate_source import KucoinRateSource
 from hummingbot.core.rate_oracle.sources.p2b_rate_source import P2bRateSource
 from hummingbot.core.rate_oracle.sources.rate_source_base import RateSourceBase
+from hummingbot.core.rate_oracle.sources.uzx_rate_source import UzxRateSource
 from hummingbot.core.rate_oracle.utils import find_rate
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.logger import HummingbotLogger
@@ -39,6 +40,7 @@ RATE_ORACLE_SOURCES = {
     "hyperliquid": HyperliquidRateSource,
     "p2b": P2bRateSource,
     "coinstore": CoinstoreRateSource,
+    "uzx": UzxRateSource,
 }
 
 

@@ -889,6 +889,17 @@ class CoinstoreRateSourceMode(ExchangeRateSourceModeBase):
         title = "coinstore"
 
 
+class UzxRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(
+        default="uzx",
+        const=True,
+        client_data=None,
+    )
+
+    class Config:
+        title = "uzx"
+
+
 class CoinbaseAdvancedTradeRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(
         default="coinbase_advanced_trade",
