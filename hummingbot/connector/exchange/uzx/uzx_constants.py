@@ -176,7 +176,7 @@ CUSTOMER_MARKET_PAIR = [
         "quote_coin_id": 9747,
         "quote_coin_name": "USDT",
         "coin_precision": 2,
-        "price_precision": 6,
+        "price_precision": 4,
         "price_unit": "0.1",
         "price_range": "0.05",
         "max_leverage": 100,
