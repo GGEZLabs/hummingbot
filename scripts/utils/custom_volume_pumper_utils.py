@@ -1,4 +1,5 @@
 import math
+import random
 from copy import deepcopy
 from decimal import Decimal
 from random import randint
@@ -73,16 +74,11 @@ class CustomVolumePumperUtils:
         if best_bid_price > last_trade_price or best_ask_price < last_trade_price:
             last_trade_price = mid_price
 
-        bid_distance_percentage = self.distance_from_last_trade_price(best_ask_price, best_bid_price, last_trade_price)
-
-        if bid_distance_percentage < 5:
-            self._current_price_movement = "up"
-        elif bid_distance_percentage > 95:
-            self._current_price_movement = "down"
+        self._decide_price_movement(best_ask_price, best_bid_price, last_trade_price)
 
         order_price = Decimal(
             last_trade_price
-            + self.tick_size * Decimal(randint(-2, 5)) * (1 if self._current_price_movement == "up" else -1)
+            + self.tick_size * Decimal(randint(0, 5)) * (1 if self._current_price_movement == "up" else -1)
         )
 
         if order_price < best_bid_price:
@@ -91,9 +87,19 @@ class CustomVolumePumperUtils:
         if order_price > best_ask_price:
             order_price = best_ask_price - self.tick_size
 
-        # adjust order price with random value
-        # order_price = Decimal(uniform(float(order_price), float(best_ask_price)))
-
         # round to tick size
         order_price = self.round_price_to_tick_size(order_price)
         return best_ask_price, best_bid_price, order_price
+
+    def _decide_price_movement(self, best_ask_price: Decimal, best_bid_price: Decimal, last_trade_price: Decimal):
+        bid_distance_percentage = self.distance_from_last_trade_price(best_ask_price, best_bid_price, last_trade_price)
+
+        if self._current_price_movement == "down":
+            # the less the bid_distance_percentage is the more likely to flip current_price_movement to up
+            flip_percentage = (1 - bid_distance_percentage / 100) ** 3
+        else:
+            # the more the bid_distance_percentage is the more likely to flip current_price_movement to up
+            flip_percentage = (bid_distance_percentage / 100) ** 3
+
+        if random.uniform(0, 1) < flip_percentage:
+            self._current_price_movement = "up" if self._current_price_movement == "down" else "down"
