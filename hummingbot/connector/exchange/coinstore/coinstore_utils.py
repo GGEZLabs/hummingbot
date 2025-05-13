@@ -1,4 +1,3 @@
-from ast import Constant
 from decimal import Decimal
 from typing import Any, Dict
 
@@ -26,7 +25,7 @@ def is_exchange_information_valid(exchange_info: Dict[str, Any]) -> bool:
     # is_spot = False
     is_trading = False
 
-    if exchange_info.get("openTrade", None) == True:
+    if exchange_info.get("openTrade", None):
         is_trading = True
 
     # permissions_sets = exchange_info.get("permissionSets", list())
@@ -68,7 +67,7 @@ class CoinstoreConfigMap(BaseConnectorConfigMap):
 KEYS = CoinstoreConfigMap.construct()
 
 OTHER_DOMAINS = ["coinstore_2"]
-OTHER_DOMAINS_PARAMETER = {"coinstore_2": "us"}
+OTHER_DOMAINS_PARAMETER = {"coinstore_2": "2"}
 OTHER_DOMAINS_EXAMPLE_PAIR = {"coinstore_2": "BTC-USDT"}
 OTHER_DOMAINS_DEFAULT_FEES = {"coinstore_2": DEFAULT_FEES}
 

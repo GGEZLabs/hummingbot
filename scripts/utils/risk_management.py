@@ -69,6 +69,19 @@ class RiskManagement:
     def is_balance_below_thresholds(self, current_balance: pd.DataFrame) -> tuple[bool, str]:
         quote_threshold, base_threshold = self._calculate_quote_base_balance_threshold()
         balance_differences_df = self._get_balance_differences_df(current_balance)
+        number_of_markets = len(balance_differences_df["Exchange"].unique())
+        if number_of_markets > 1:
+            balance_differences_df = balance_differences_df.groupby("Asset").agg(
+                {
+                    "Starting_Available_Balance": "sum",
+                    "Starting_Balance": "sum",
+                    "Current_Available_Balance": "sum",
+                    "Current_Balance": "sum",
+                    "Difference_Balance": "sum",
+                    "Difference_Available_Balance": "sum",
+                }
+            )
+
         base_condition, quote_condition = self._check_thresholds(
             balance_differences_df, base_threshold, quote_threshold
         )

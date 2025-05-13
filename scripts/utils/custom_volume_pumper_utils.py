@@ -13,13 +13,11 @@ class CustomVolumePumperUtils:
     def __init__(
         self,
         connector: ConnectorBase,
-        exchange: str,
         trading_pair: str,
         base: str,
         quote: str,
     ):
         self.connector = connector
-        self.exchange = exchange
         self.trading_pair = trading_pair
         self.base = base
         self.quote = quote
@@ -31,17 +29,17 @@ class CustomVolumePumperUtils:
         return self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
 
     def adjust_order_amount_for_balance(
-        self, order_price: Decimal, order_amount: Decimal, balance: pd.DataFrame
+        self, order_price: Decimal, order_amount: Decimal, balance: pd.DataFrame, exchange: str
     ) -> Decimal:
         new_order_amount = deepcopy(order_amount)
         quote_balance = Decimal(
             balance.loc[
-                (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.quote), "Available Balance"
+                (balance["Exchange"] == exchange) & (balance["Asset"] == self.quote), "Available Balance"
             ].iloc[0]
         )
         base_balance = Decimal(
             balance.loc[
-                (balance["Exchange"] == self.exchange) & (balance["Asset"] == self.base), "Available Balance"
+                (balance["Exchange"] == exchange) & (balance["Asset"] == self.base), "Available Balance"
             ].iloc[0]
         )
 

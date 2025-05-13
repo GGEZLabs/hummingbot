@@ -9,28 +9,30 @@ from hummingbot.connector.utils import split_hb_trading_pair
 from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
 from hummingbot.core.data_type.order_candidate import OrderCandidate
 from hummingbot.strategy.script_strategy_base import ScriptStrategyBase
-from scripts.utils.custom_volume_pumper_config import CustomVolumePumperConfig
 from scripts.utils.custom_volume_pumper_utils import CustomVolumePumperUtils
 from scripts.utils.report_management import ReportManagement
 from scripts.utils.risk_management import RiskManagement
+from scripts.utils.two_accounts_volume_pumper_config import TwoAccountsVolumePumperConfig
 
 
-class CustomVolumePumperStatus(Enum):
+class TwoAccountsVolumePumperStatus(Enum):
     NOT_INITIALIZED = 0
     RUNNING = 1
     STOPPED = 2
     UNDERBALANCED = 3
+    BALANCING_INVENTORIES = 4
 
 
-class CustomVolumePumper(ScriptStrategyBase):
+class TwoAccountsVolumePumper(ScriptStrategyBase):
     @classmethod
-    def init_markets(cls, config: CustomVolumePumperConfig):
-        cls.markets = {config.exchange: {config.trading_pair}}
+    def init_markets(cls, config: TwoAccountsVolumePumperConfig):
+        cls.markets = {config.exchange: {config.trading_pair}, config.second_exchange: {config.trading_pair}}
 
-    def __init__(self, connectors: Dict[str, ConnectorBase], config: CustomVolumePumperConfig):
+    def __init__(self, connectors: Dict[str, ConnectorBase], config: TwoAccountsVolumePumperConfig):
         super().__init__(connectors)
         # config data
         self.exchange = config.exchange
+        self.second_exchange = config.second_exchange
         self.trading_pair = config.trading_pair
         self.order_lower_amount = config.order_lower_amount
         self.order_upper_amount = config.order_upper_amount
@@ -43,11 +45,17 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.price_source = PriceType.MidPrice
         self.last_mid_price_timestamp = time.time()
         self.random_delay = 0
-        self.status = CustomVolumePumperStatus.NOT_INITIALIZED
+        self.status = TwoAccountsVolumePumperStatus.NOT_INITIALIZED
+        self.exchange_order_side = TradeType.BUY
+        self.second_exchange_order_side = TradeType.SELL
 
     @property
     def connector(self) -> ConnectorBase:
         return self.connectors[self.exchange]
+
+    @property
+    def second_connector(self) -> ConnectorBase:
+        return self.connectors[self.second_exchange]
 
     def init_strategy(self):
         """
@@ -63,7 +71,7 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.base, self.quote = split_hb_trading_pair(self.trading_pair)
         self.last_trade_price = self.connector.get_order_book(self.trading_pair).last_trade_price
         self.starting_balance = self.get_balance_df()
-        self.status = CustomVolumePumperStatus.RUNNING
+        self.status = TwoAccountsVolumePumperStatus.RUNNING
         # risk management
         self.risk_management = RiskManagement(
             balance_loss_threshold=self.balance_loss_threshold,
@@ -89,19 +97,39 @@ class CustomVolumePumper(ScriptStrategyBase):
         self.minimum_ask_bid_spread = self.utils.convert_from_basis_point(self.minimum_ask_bid_spread_BS)
 
     def on_tick(self):
-        if self.status == CustomVolumePumperStatus.NOT_INITIALIZED:
+        if self.status == TwoAccountsVolumePumperStatus.NOT_INITIALIZED:
             self.init_strategy()
 
-        if self.status == CustomVolumePumperStatus.STOPPED:
+        if self.status == TwoAccountsVolumePumperStatus.STOPPED:
             # check if balance return to the starting balance
             if self.risk_management.check_balance_returned(current_balance=self.get_balance_df()):
                 notification = "\nNOTIFICATION : Balance has returned to starting balance.\nResuming strategy."
                 self.logger().notify(notification)
-                self.status = CustomVolumePumperStatus.RUNNING
+                self.status = TwoAccountsVolumePumperStatus.RUNNING
 
             return
 
-        if self.status == CustomVolumePumperStatus.UNDERBALANCED:
+        if self.status == TwoAccountsVolumePumperStatus.UNDERBALANCED:
+            return
+
+        if self.status == TwoAccountsVolumePumperStatus.BALANCING_INVENTORIES:
+            exchange_order_proposal, second_exchange_order_proposal = self.get_balancing_orders_candidates()
+            self.place_order(self.exchange, exchange_order_proposal)
+            self.place_order(self.second_exchange, second_exchange_order_proposal)
+
+            # balancing the inventories should activate check_balance_returned function
+            # which will resume the strategy
+            # the status is stopped to prevent placing orders
+            self.status = TwoAccountsVolumePumperStatus.STOPPED
+
+            notification = (
+                "\nNOTIFICATION : Balancing inventories.\nOrders placed to balance the inventories."
+                f"\nOrder amount: {exchange_order_proposal.amount}"
+                f"\nOrder price: {exchange_order_proposal.price}"
+                f"\nAccount 1 order side: {exchange_order_proposal.order_side.name}"
+                f"\nAccount 2 order side: {second_exchange_order_proposal.order_side.name}"
+            )
+            self.logger().notify(notification)
             return
 
         #  cancel all orders active orders
@@ -127,7 +155,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.logger().notify(stop_loss_notification)
             self.cancel_all_orders()
             self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
-            self.status = CustomVolumePumperStatus.STOPPED
+            self.status = TwoAccountsVolumePumperStatus.STOPPED
             return
 
         # calculate order price
@@ -166,33 +194,51 @@ class CustomVolumePumper(ScriptStrategyBase):
             order_amount = randint(self.order_lower_amount, self.order_upper_amount)  # in base (GGEZ1)
 
             # check if we have enough balance to place order
-            adjusted_order_amount = self.utils.adjust_order_amount_for_balance(
+            adjusted_exchange_order_amount = self.utils.adjust_order_amount_for_balance(
                 order_price, order_amount, self.get_balance_df(), self.exchange
             )
+
+            adjusted_second_exchange_order_amount = self.utils.adjust_order_amount_for_balance(
+                order_price, order_amount, self.get_balance_df(), self.second_exchange
+            )
+            adjusted_order_amount = min(adjusted_exchange_order_amount, adjusted_second_exchange_order_amount)
+
             if adjusted_order_amount < self.order_lower_amount:
                 notification = (
                     f"\nNOTIFICATION : Stopping strategy initiated"
                     "\nBalance is not enough to place order."
-                    "\nPlease Increase Your Balance, Then Restart The Bot."
+                    "\nBalancing inventories will start"
                     f"\nOrder amount: {order_amount}"
                     f"\nAdjusted order amount: {adjusted_order_amount}"
                     f"\nMinimum order amount: {self.order_lower_amount}"
                     f"\nBalance: {self.get_balance_df()}"
                     f"\nOrder Price: {order_price}"
                 )
-                self.status = CustomVolumePumperStatus.UNDERBALANCED
+                self.status = TwoAccountsVolumePumperStatus.BALANCING_INVENTORIES
                 self.logger().notify(notification)
                 return
 
-            # create order proposals and place them
-            sell_order_proposal = self.generate_order_candidate(order_price, adjusted_order_amount, False)
-            self.place_order(self.exchange, sell_order_proposal)
+            # create two order proposals for each exchange
+            # one for buy and one for sell
+            # check if both account have enough balance to place order
+            # when the order amount is more than the balance, swap the order side
+            # then adjust the order amount for the balance
+            exchange_order_proposal = self.generate_order_candidate(
+                order_price, adjusted_order_amount, self.exchange_order_side
+            )
+            second_exchange_order_proposal = self.generate_order_candidate(
+                order_price, adjusted_order_amount, self.second_exchange_order_side
+            )
+            self.place_order(self.exchange, exchange_order_proposal)
+            self.place_order(self.second_exchange, second_exchange_order_proposal)
 
-            buy_order_proposal = self.generate_order_candidate(order_price, adjusted_order_amount, True)
-            self.place_order(self.exchange, buy_order_proposal)
+            # update last trade price
             self.last_trade_price = order_price
             # update total and interval trade data
             self.report_management.add_new_order(adjusted_order_amount, order_price)
+            # flip order side
+            self.flip_next_order_side()
+
         else:
             self.report_management.increase_total_out_of_spread_count()
             self.logger().info(f"Order price {order_price} is not within spread {best_ask_price} - {best_bid_price}")
@@ -219,17 +265,59 @@ class CustomVolumePumper(ScriptStrategyBase):
                 price=order.price,
             )
 
-    def generate_order_candidate(self, order_price, order_amount, is_buy=True):
+    def generate_order_candidate(self, order_price, order_amount, order_side):
         buy_order_proposal = OrderCandidate(
             trading_pair=self.trading_pair,
             is_maker=True,
             order_type=OrderType.LIMIT,
-            order_side=TradeType.BUY if is_buy else TradeType.SELL,
+            order_side=order_side,
             amount=Decimal(order_amount),
             price=order_price,
         )
 
         return buy_order_proposal
+
+    def flip_next_order_side(self):
+        if self.exchange_order_side == TradeType.SELL:
+            self.exchange_order_side = TradeType.BUY
+            self.second_exchange_order_side = TradeType.SELL
+        else:
+            self.exchange_order_side = TradeType.SELL
+            self.second_exchange_order_side = TradeType.BUY
+
+    def get_balancing_orders_candidates(self):
+        balance_df = self.get_balance_df()
+        base_exchange_balances = (
+            balance_df.loc[
+                (balance_df["Asset"] == self.base) & (balance_df["Exchange"] == self.exchange),
+                ["Available Balance"],
+            ]
+            .iloc[0]
+            .values[0]
+        )
+        starting_base_exchange_balances = (
+            self.starting_balance.loc[
+                (self.starting_balance["Asset"] == self.base) & (self.starting_balance["Exchange"] == self.exchange),
+                ["Available Balance"],
+            ]
+            .iloc[0]
+            .values[0]
+        )
+        if starting_base_exchange_balances > base_exchange_balances:
+            first_exchange_order_side = TradeType.SELL
+            second_exchange_order_side = TradeType.BUY
+        else:
+            first_exchange_order_side = TradeType.BUY
+            second_exchange_order_side = TradeType.SELL
+            pass
+
+        order_amount = abs(starting_base_exchange_balances - base_exchange_balances)
+        order_price = self.connector.get_mid_price(self.trading_pair)
+        exchange_order_proposal = self.generate_order_candidate(order_price, order_amount, first_exchange_order_side)
+        second_exchange_order_proposal = self.generate_order_candidate(
+            order_price, order_amount, second_exchange_order_side
+        )
+        return exchange_order_proposal, second_exchange_order_proposal
 
     def cancel_all_orders(self):
         active_orders = self.get_active_orders(connector_name=self.exchange)
