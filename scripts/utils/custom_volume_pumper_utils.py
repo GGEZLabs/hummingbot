@@ -7,6 +7,7 @@ from random import randint
 import pandas as pd
 
 from hummingbot.connector.connector_base import ConnectorBase
+from hummingbot.core.data_type.common import TradeType
 
 
 class CustomVolumePumperUtils:
@@ -29,25 +30,27 @@ class CustomVolumePumperUtils:
         return self.connector.get_order_price_quantum(self.trading_pair, best_bid_price)
 
     def adjust_order_amount_for_balance(
-        self, order_price: Decimal, order_amount: Decimal, balance: pd.DataFrame, exchange: str
+        self, order_price: Decimal, order_amount: Decimal, balance: pd.DataFrame, exchange: str, order_side: TradeType
     ) -> Decimal:
         new_order_amount = deepcopy(order_amount)
-        quote_balance = Decimal(
-            balance.loc[
-                (balance["Exchange"] == exchange) & (balance["Asset"] == self.quote), "Available Balance"
-            ].iloc[0]
-        )
-        base_balance = Decimal(
-            balance.loc[
-                (balance["Exchange"] == exchange) & (balance["Asset"] == self.base), "Available Balance"
-            ].iloc[0]
-        )
 
-        if quote_balance < order_amount * order_price:
-            new_order_amount = math.floor(quote_balance / order_price)
+        if order_side == TradeType.BUY:
+            quote_balance = Decimal(
+                balance.loc[
+                    (balance["Exchange"] == exchange) & (balance["Asset"] == self.quote), "Available Balance"
+                ].iloc[0]
+            )
+            if quote_balance < order_amount * order_price:
+                new_order_amount = math.floor(quote_balance / order_price)
 
-        if base_balance < order_amount:
-            new_order_amount = base_balance
+        else:
+            base_balance = Decimal(
+                balance.loc[
+                    (balance["Exchange"] == exchange) & (balance["Asset"] == self.base), "Available Balance"
+                ].iloc[0]
+            )
+            if base_balance < order_amount:
+                new_order_amount = base_balance
 
         return new_order_amount
 

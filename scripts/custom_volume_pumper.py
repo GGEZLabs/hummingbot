@@ -166,9 +166,13 @@ class CustomVolumePumper(ScriptStrategyBase):
             order_amount = randint(self.order_lower_amount, self.order_upper_amount)  # in base (GGEZ1)
 
             # check if we have enough balance to place order
-            adjusted_order_amount = self.utils.adjust_order_amount_for_balance(
-                order_price, order_amount, self.get_balance_df(), self.exchange
+            adjusted_sell_order_amount = self.utils.adjust_order_amount_for_balance(
+                order_price, order_amount, self.get_balance_df(), self.exchange, TradeType.SELL
             )
+            adjusted_buy_order_amount = self.utils.adjust_order_amount_for_balance(
+                order_price, order_amount, self.get_balance_df(), self.exchange, TradeType.BUY
+            )
+            adjusted_order_amount = min(adjusted_sell_order_amount, adjusted_buy_order_amount)
             if adjusted_order_amount < self.order_lower_amount:
                 notification = (
                     f"\nNOTIFICATION : Stopping strategy initiated"
