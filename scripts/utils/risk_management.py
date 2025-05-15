@@ -80,7 +80,7 @@ class RiskManagement:
                     "Difference_Balance": "sum",
                     "Difference_Available_Balance": "sum",
                 }
-            )
+            ).reset_index()
 
         base_condition, quote_condition = self._check_thresholds(
             balance_differences_df, base_threshold, quote_threshold

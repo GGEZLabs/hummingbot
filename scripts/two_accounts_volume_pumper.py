@@ -19,6 +19,7 @@ class TwoAccountsVolumePumperStatus(Enum):
     NOT_INITIALIZED = 0
     RUNNING = 1
     STOPPED = 2
+    UNDERBALANCED = 3
 
 
 class TwoAccountsVolumePumper(ScriptStrategyBase):
@@ -104,6 +105,13 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
                 notification = "\nNOTIFICATION : Balance has returned to starting balance.\nResuming strategy."
                 self.logger().notify(notification)
                 self.status = TwoAccountsVolumePumperStatus.RUNNING
+
+            return
+
+        if self.status == TwoAccountsVolumePumperStatus.UNDERBALANCED:
+            # TODO check if the balance is more than the order lower amount
+            # if yes, resume the strategy
+
             return
 
         #  cancel all orders active orders
@@ -180,6 +188,20 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
             adjusted_order_amount = min(adjusted_first_exchange_order_amount, adjusted_second_exchange_order_amount)
 
             if adjusted_order_amount < self.order_lower_amount:
+                # check if account have enough balance to place order
+                if self.is_balance_below_minimum_order_amount(self.first_exchange):
+                    self.logger().notify(
+                        f"\nNOTIFICATION : {self.first_exchange} balance is below minimum order amount."
+                    )
+                    self.status = TwoAccountsVolumePumperStatus.UNDERBALANCED
+                    return
+                if self.is_balance_below_minimum_order_amount(self.second_exchange):
+                    self.logger().notify(
+                        f"\nNOTIFICATION : {self.second_exchange} balance is below minimum order amount."
+                    )
+                    self.status = TwoAccountsVolumePumperStatus.UNDERBALANCED
+                    return
+
                 self.flip_next_order_side()
                 return
 
@@ -276,3 +298,24 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
             f"\n\n Current Price Trend : {self.utils._current_price_movement}wards"  # upwards or downwards
         )
         return text + f"\n\n{order_info}\n\n{self.report_management.generate_report()}"
+
+    def is_balance_below_minimum_order_amount(self, exchange: str):
+        # check if balance is below the minimum order amount
+        balance_df = self.get_balance_df()
+        mid_price = float(self.first_connector.get_mid_price(self.trading_pair))
+        base_balances = (
+            balance_df.loc[
+                (balance_df["Asset"] == self.base) & (balance_df["Exchange"] == exchange), ["Available Balance"]
+            ]
+            .iloc[0]
+            .values[0]
+        )
+        quote_balances = (
+            balance_df.loc[
+                (balance_df["Asset"] == self.quote) & (balance_df["Exchange"] == exchange), ["Available Balance"]
+            ]
+            .iloc[0]
+            .values[0]
+        )
+        quote_balances = quote_balances / mid_price
+        return base_balances < self.order_lower_amount and quote_balances < self.order_lower_amount
