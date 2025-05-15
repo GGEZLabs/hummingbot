@@ -19,8 +19,6 @@ class TwoAccountsVolumePumperStatus(Enum):
     NOT_INITIALIZED = 0
     RUNNING = 1
     STOPPED = 2
-    UNDERBALANCED = 3
-    BALANCING_INVENTORIES = 4
 
 
 class TwoAccountsVolumePumper(ScriptStrategyBase):
@@ -106,13 +104,6 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
                 notification = "\nNOTIFICATION : Balance has returned to starting balance.\nResuming strategy."
                 self.logger().notify(notification)
                 self.status = TwoAccountsVolumePumperStatus.RUNNING
-
-            return
-
-        if self.status == TwoAccountsVolumePumperStatus.UNDERBALANCED:
-            # TODO check if the balance is more than the order lower amount
-            # if yes, resume the strategy
-
             return
 
         #  cancel all orders active orders
@@ -189,26 +180,9 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
             adjusted_order_amount = min(adjusted_first_exchange_order_amount, adjusted_second_exchange_order_amount)
 
             if adjusted_order_amount < self.order_lower_amount:
-                notification = (
-                    f"\nNOTIFICATION : Stopping strategy initiated"
-                    "\nBalance is not enough to place order."
-                    "\nBalancing inventories will start"
-                    f"\nOrder amount: {order_amount}"
-                    f"\nAdjusted order amount: {adjusted_order_amount}"
-                    f"\nMinimum order amount: {self.order_lower_amount}"
-                    f"\nBalance: {self.get_balance_df()}"
-                    f"\nOrder Price: {order_price}"
-                )
                 self.flip_next_order_side()
-                # self.status = TwoAccountsVolumePumperStatus.BALANCING_INVENTORIES
-                self.logger().notify(notification)
                 return
 
-            # create two order proposals for each exchange
-            # one for buy and one for sell
-            # check if both account have enough balance to place order
-            # when the order amount is more than the balance, swap the order side
-            # then adjust the order amount for the balance
             exchange_order_proposal = self.generate_order_candidate(
                 order_price, adjusted_order_amount, self.first_exchange_order_side
             )
