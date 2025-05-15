@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 class UzxExchange(ExchangePyBase):
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
+    LONG_POLL_INTERVAL = 30
 
     web_utils = web_utils
 

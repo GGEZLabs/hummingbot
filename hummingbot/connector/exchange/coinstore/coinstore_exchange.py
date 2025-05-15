@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 class CoinstoreExchange(ExchangePyBase):
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 1.0
+    LONG_POLL_INTERVAL = 30
 
     web_utils = web_utils
 
