@@ -71,16 +71,20 @@ class RiskManagement:
         balance_differences_df = self._get_balance_differences_df(current_balance)
         number_of_markets = len(balance_differences_df["Exchange"].unique())
         if number_of_markets > 1:
-            balance_differences_df = balance_differences_df.groupby("Asset").agg(
-                {
-                    "Starting_Available_Balance": "sum",
-                    "Starting_Balance": "sum",
-                    "Current_Available_Balance": "sum",
-                    "Current_Balance": "sum",
-                    "Difference_Balance": "sum",
-                    "Difference_Available_Balance": "sum",
-                }
-            ).reset_index()
+            balance_differences_df = (
+                balance_differences_df.groupby("Asset")
+                .agg(
+                    {
+                        "Starting_Available_Balance": "sum",
+                        "Starting_Balance": "sum",
+                        "Current_Available_Balance": "sum",
+                        "Current_Balance": "sum",
+                        "Difference_Balance": "sum",
+                        "Difference_Available_Balance": "sum",
+                    }
+                )
+                .reset_index()
+            )
 
         base_condition, quote_condition = self._check_thresholds(
             balance_differences_df, base_threshold, quote_threshold
@@ -92,7 +96,22 @@ class RiskManagement:
     def check_balance_returned(self, current_balance: pd.DataFrame) -> bool:
         if current_balance.equals(self.starting_balance):
             return True
-
+        number_of_markets = len(current_balance["Exchange"].unique())
+        if number_of_markets > 1:
+            current_balance_df_agg = current_balance.groupby("Asset").agg(
+                {
+                    "Total Balance": "sum",
+                    "Available Balance": "sum",
+                }
+            )
+            starting_balance_df_agg = self.starting_balance.groupby("Asset").agg(
+                {
+                    "Total Balance": "sum",
+                    "Available Balance": "sum",
+                }
+            )
+            if current_balance_df_agg.equals(starting_balance_df_agg):
+                return True
         return False
 
     def _generate_telegram_notification(
