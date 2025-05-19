@@ -44,7 +44,7 @@ KEYS = UzxConfigMap.construct()
 
 
 OTHER_DOMAINS = ["uzx_2"]
-OTHER_DOMAINS_PARAMETER = {"uzx_2": "2"}
+OTHER_DOMAINS_PARAMETER = {"uzx_2": "_2"}
 OTHER_DOMAINS_EXAMPLE_PAIR = {"uzx_2": "BTC-USDT"}
 OTHER_DOMAINS_DEFAULT_FEES = {"uzx_2": DEFAULT_FEES}
 
@@ -54,7 +54,7 @@ class UzxUSConfigMap(BaseConnectorConfigMap):
     uzx_api_key: SecretStr = Field(
         default=...,
         client_data=ClientFieldData(
-            prompt=lambda cm: "Enter your Uzx US API key",
+            prompt=lambda cm: "Enter your Uzx 2 API key",
             is_secure=True,
             is_connect_key=True,
             prompt_on_new=True,
@@ -63,7 +63,7 @@ class UzxUSConfigMap(BaseConnectorConfigMap):
     uzx_api_secret: SecretStr = Field(
         default=...,
         client_data=ClientFieldData(
-            prompt=lambda cm: "Enter your Uzx US API secret",
+            prompt=lambda cm: "Enter your Uzx 2 API secret",
             is_secure=True,
             is_connect_key=True,
             prompt_on_new=True,

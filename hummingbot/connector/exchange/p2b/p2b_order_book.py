@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Dict, Optional
 
 from hummingbot.core.data_type.common import TradeType
@@ -79,10 +80,10 @@ class P2bOrderBook(OrderBook):
             {
                 "trading_pair": msg["trading_pair"],
                 "trade_type": float(TradeType.SELL.value) if msg["type"] else float(TradeType.BUY.value),
-                "trade_id": msg["id"],
-                "update_id": ts,
-                "price": msg["price"],
-                "amount": msg["amount"],
+                "trade_id": str(msg["id"]),
+                "update_id": float(ts),
+                "price": Decimal(msg["price"]),
+                "amount": Decimal(msg["amount"]),
             },
             timestamp=ts * 1e-3,
         )

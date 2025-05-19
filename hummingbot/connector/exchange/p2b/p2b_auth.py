@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+from random import randint
 from typing import Any, Dict
 
 import hummingbot.connector.exchange.p2b.p2b_constants as CONSTANTS
@@ -54,7 +55,7 @@ class P2bAuth(AuthBase):
         request_params["request"] = request_url.replace(CONSTANTS.REST_URL, "")
 
         timestamp = int(self.time_provider.time() * 1e3)
-        request_params["nonce"] = timestamp
+        request_params["nonce"] = timestamp + randint(1, 1000)
 
         return request_params
 

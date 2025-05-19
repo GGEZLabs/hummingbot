@@ -43,7 +43,7 @@ class P2bConfigMap(BaseConnectorConfigMap):
 KEYS = P2bConfigMap.construct()
 
 OTHER_DOMAINS = ["p2b_2"]
-OTHER_DOMAINS_PARAMETER = {"p2b_2": "2"}
+OTHER_DOMAINS_PARAMETER = {"p2b_2": "_2"}
 OTHER_DOMAINS_EXAMPLE_PAIR = {"p2b_2": "BTC-USDT"}
 OTHER_DOMAINS_DEFAULT_FEES = {"p2b_2": DEFAULT_FEES}
 
@@ -53,7 +53,7 @@ class P2bUSConfigMap(BaseConnectorConfigMap):
     p2b_api_key: SecretStr = Field(
         default=...,
         client_data=ClientFieldData(
-            prompt=lambda cm: "Enter your P2b US API key",
+            prompt=lambda cm: "Enter your P2b 2 API key",
             is_secure=True,
             is_connect_key=True,
             prompt_on_new=True,
@@ -62,7 +62,7 @@ class P2bUSConfigMap(BaseConnectorConfigMap):
     p2b_api_secret: SecretStr = Field(
         default=...,
         client_data=ClientFieldData(
-            prompt=lambda cm: "Enter your P2b US API secret",
+            prompt=lambda cm: "Enter your P2b 2 API secret",
             is_secure=True,
             is_connect_key=True,
             prompt_on_new=True,

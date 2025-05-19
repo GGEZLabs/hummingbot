@@ -26,7 +26,8 @@ if TYPE_CHECKING:
 
 class P2bExchange(ExchangePyBase):
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 1.0
-    LONG_POLL_INTERVAL = 30
+    LONG_POLL_INTERVAL = 10
+    TICK_INTERVAL_LIMIT = 10
     web_utils = web_utils
 
     def __init__(

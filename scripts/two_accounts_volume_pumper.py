@@ -115,8 +115,8 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
             return
 
         #  cancel all orders active orders
-        self.cancel_all_orders(self.first_exchange)
-        self.cancel_all_orders(self.second_exchange)
+        # self.cancel_all_orders(self.first_exchange)
+        # self.cancel_all_orders(self.second_exchange)
 
         if (
             self.periodic_report_interval > 0
@@ -140,6 +140,8 @@ class TwoAccountsVolumePumper(ScriptStrategyBase):
             self.cancel_all_orders(self.second_exchange)
             self.logger().notify("\nNOTIFICATION : Stopping strategy initiated.\nCanceling all orders")
             self.status = TwoAccountsVolumePumperStatus.STOPPED
+            self.cancel_all_orders(self.first_exchange)
+            self.cancel_all_orders(self.second_exchange)
             return
 
         # calculate order price
