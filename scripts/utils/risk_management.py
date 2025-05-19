@@ -87,7 +87,7 @@ class RiskManagement:
             )
 
         base_condition, quote_condition = self._check_thresholds(
-            balance_differences_df, base_threshold, quote_threshold
+            balance_differences_df.round(2), base_threshold, quote_threshold
         )
         is_below_threshold = base_condition or quote_condition
         notification = self._generate_telegram_notification(balance_differences_df, base_condition, quote_condition)
