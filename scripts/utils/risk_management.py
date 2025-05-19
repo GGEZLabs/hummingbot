@@ -98,17 +98,25 @@ class RiskManagement:
             return True
         number_of_markets = len(current_balance["Exchange"].unique())
         if number_of_markets > 1:
-            current_balance_df_agg = current_balance.groupby("Asset").agg(
-                {
-                    "Total Balance": "sum",
-                    "Available Balance": "sum",
-                }
+            current_balance_df_agg = (
+                current_balance.groupby("Asset")
+                .agg(
+                    {
+                        "Total Balance": "sum",
+                        "Available Balance": "sum",
+                    }
+                )
+                .round(2)
             )
-            starting_balance_df_agg = self.starting_balance.groupby("Asset").agg(
-                {
-                    "Total Balance": "sum",
-                    "Available Balance": "sum",
-                }
+            starting_balance_df_agg = (
+                self.starting_balance.groupby("Asset")
+                .agg(
+                    {
+                        "Total Balance": "sum",
+                        "Available Balance": "sum",
+                    }
+                )
+                .round(2)
             )
             if current_balance_df_agg.equals(starting_balance_df_agg):
                 return True
