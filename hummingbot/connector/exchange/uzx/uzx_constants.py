@@ -15,23 +15,25 @@ UNKNOWN_ORDER_ERROR_CODE = "XXXX"  # TODO
 
 # Base URL
 DEFAULT_DOMAIN = "com"
-REST_URL = "https://api.uzx.com"
-PUBLIC_WSS_URL = "wss://v2-api.uzx.com/notification/swap/ws"
-PRIVATE_WSS_URL = "wss://v2-api.uzx.com/notification/pri/ws"
+REST_URL = "https://api-v2.uzx.com"
+PUBLIC_WSS_URL = "wss://stream.uzx.com/notification/ws"
+PRIVATE_WSS_URL = "wss://stream.uzx.com/notification/pri/ws"
 
 
 # Public API endpoints
-MARKETS_PATH_URL = "/api/v1/swap/symbols"
-TICKERS_PATH_URL = "/api/symbol-thumb"
+MARKETS_PATH_URL = "/v2/products"
+TICKERS_PATH_URL = "/notification/spot/tickers"
+PAIR_TICKER_PATH_URL = "/notification/spot/{symbol}/ticker"
+SERVER_TIME_URL = "/v2/time"
+DEPTH_PATH_URL = "/notification/spot/{symbol}/orderbook"
 
 # Private API endpoints
-BALANCES_PATH_URL = "/api/asset/wallet"
-LATEST_TRADES_PATH_URL = "/api/latest-trade"
-DEPTH_PATH_URL = "/api/exchange-plate-depth"
-CREATE_NEW_ORDER_PATH_URL = "/api/order/add"
-CANCEL_ORDER_PATH_URL = "/api/order/cancel/{orderId}"
-FILLED_ORDERS_PATH_URL = "/api/order/history"
-CURRENT_ORDERS_PATH_URL = "/api/order/current/now"
+BALANCES_PATH_URL = "/v2/account/balances"
+CREATE_NEW_ORDER_PATH_URL = "/v2/trade/spot/order"
+CANCEL_ORDER_PATH_URL = "/v2/trade/cancel-order"
+FILLED_ORDERS_PATH_URL = "/v2/trade/history/orders"
+CURRENT_ORDERS_PATH_URL = "/v2/trade/orders"
+
 
 # order requests cache time
 ORDER_REQUESTS_CACHE_TIME = 10
@@ -44,60 +46,71 @@ TAKER_SIDE_SELL = "sell"
 TAKER_SIDE_BUY = "buy"
 
 # Rate Limit time intervals
-RAW_REQUESTS = "RAW_REQUESTS"
+IP_LIMITING_RULE = "IP_LIMITING_RULE"
+USER_LIMITING_RULE = "USER_LIMITING_RULE"
 ONE_SECOND = 1
 
 # Websocket event types
 SUBSCRIBE_METHOD = "sub"
 DIFF_EVENT_TYPE = "depthUpdate"
 DEALS_EVENT_TYPE = "fills"
-DEPTH_EVENT_TYPE = "orderbook"
-SUBSCRIBE_TYPE = "swap"
+DEPTH_EVENT_TYPE = "orderBook"
+SUBSCRIBE_TYPE = "spot"
 
 RATE_LIMITS = [
     # Pools
-    RateLimit(limit_id=RAW_REQUESTS, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=IP_LIMITING_RULE, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=USER_LIMITING_RULE, limit=10, time_interval=ONE_SECOND),
     # Weighted Limits
     # Public API endpoints
     RateLimit(
-        limit_id=MARKETS_PATH_URL,
-        limit=3,
+        limit_id=SERVER_TIME_URL,
+        limit=10,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+        ],
+    ),
+    RateLimit(
+        limit_id=PAIR_TICKER_PATH_URL,
+        limit=10,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+        ],
+    ),
+    RateLimit(
+        limit_id=MARKETS_PATH_URL,
+        limit=10,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
         ],
     ),
     RateLimit(
         limit_id=TICKERS_PATH_URL,
-        limit=3,
+        limit=10,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+        ],
+    ),
+    RateLimit(
+        limit_id=DEPTH_PATH_URL,
+        limit=10,
+        time_interval=ONE_SECOND,
+        linked_limits=[
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
         ],
     ),
     # Private API endpoints
     RateLimit(
-        limit_id=DEPTH_PATH_URL,
-        limit=3,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
         limit_id=BALANCES_PATH_URL,
-        limit=3,
+        limit=10,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
-        ],
-    ),
-    RateLimit(
-        limit_id=LATEST_TRADES_PATH_URL,
-        limit=3,
-        time_interval=ONE_SECOND,
-        linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+            LinkedLimitWeightPair(USER_LIMITING_RULE),
         ],
     ),
     RateLimit(
@@ -105,7 +118,8 @@ RATE_LIMITS = [
         limit=3,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+            LinkedLimitWeightPair(USER_LIMITING_RULE),
         ],
     ),
     RateLimit(
@@ -113,79 +127,67 @@ RATE_LIMITS = [
         limit=3,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+            LinkedLimitWeightPair(USER_LIMITING_RULE),
         ],
     ),
     RateLimit(
         limit_id=FILLED_ORDERS_PATH_URL,
-        limit=3,
+        limit=10,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+            LinkedLimitWeightPair(USER_LIMITING_RULE),
         ],
     ),
     RateLimit(
         limit_id=CURRENT_ORDERS_PATH_URL,
-        limit=3,
+        limit=10,
         time_interval=ONE_SECOND,
         linked_limits=[
-            LinkedLimitWeightPair(RAW_REQUESTS),
+            LinkedLimitWeightPair(IP_LIMITING_RULE),
+            LinkedLimitWeightPair(USER_LIMITING_RULE),
         ],
     ),
 ]
 
 # Order States
 ORDER_STATE = {
-    "PENDING": OrderState.PENDING_CREATE,
-    "OPEN": OrderState.OPEN,
-    "FILLED": OrderState.FILLED,
-    "PARTIALLY_FILLED": OrderState.PARTIALLY_FILLED,
-    "PENDING_CANCEL": OrderState.OPEN,
-    "CANCELED": OrderState.CANCELED,
-    "REJECTED": OrderState.FAILED,
-    "EXPIRED": OrderState.FAILED,
-    "EXPIRED_IN_MATCH": OrderState.FAILED,
+    0: OrderState.OPEN,
+    1: OrderState.PARTIALLY_FILLED,
+    2: OrderState.PARTIALLY_FILLED,
+    3: OrderState.CANCELED,
+    4: OrderState.FILLED,
 }
 
 
 # exchange status
 class OrderStatus(Enum):
-    TRADING = "TRADING"
-    COMPLETED = "COMPLETED"
-    CANCELED = "CANCELED"
-    OVERTIMED = "OVERTIMED"
+    PENDING = 0
+    PARTIALLY_FILLED = 1
+    PARTIALLY_CANCELED = 2
+    CANCELED = 3
+    FULLY_FILLED = 4
 
 
 class Order_Direction(Enum):
-    buy = "BUY"
-    sell = "SELL"
+    buy = 1
+    sell = 2
 
 
 class Order_Type(Enum):
-    market_price = "MARKET_PRICE"
-    limit_price = "LIMIT_PRICE"
+    MARKET_ORDER = 1
+    LIMIT_GTC = 2
+    LIMIT_IOC = 3
+    LIMIT_FOK = 4
+    LIMIT_MAKER = 5
+    ADD_MARGIN = 6
+    REDUCE_MARGIN = 7
+    MODIFY_LEVERAGE = 8
+    ONE_CLICK_CLOSING = 9
 
 
-CUSTOMER_MARKET_PAIR = [
-    {
-        "product_id": 204165,
-        "product_name": "GGEZ1USDT",
-        "swap_value": "0.001",
-        "base_coin_id": 9075,
-        "base_coin_name": "GGEZ1",
-        "quote_coin_id": 9747,
-        "quote_coin_name": "USDT",
-        "coin_precision": 4,
-        "price_precision": 6,
-        "price_unit": "0.1",
-        "price_range": "0.05",
-        "max_leverage": 100,
-        "max_once_limit_num": 300000,
-        "max_once_market_num": 100000,
-        "max_hold_num": 1000000,
-        "status": 1,
-        "maker_fee": "0.0004",
-        "taker_fee": "0.0006",
-        "sort": 0,
-    }
-]
+class Products_Type(Enum):
+    base = "BASE"
+    swap = "SWAP"
+    spot = "SPOT"

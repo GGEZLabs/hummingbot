@@ -55,7 +55,13 @@ class RESTAssistant:
             timeout=timeout,
             headers=headers,
         )
-        response_json = await response.json()
+        # response_json = await response.json()
+        text = await response.text()
+        try:
+            response_json = json.loads(text)
+        except json.JSONDecodeError:
+            print("Invalid JSON:", text)
+            response_json = None
         return response_json
 
     async def execute_request_and_get_response(

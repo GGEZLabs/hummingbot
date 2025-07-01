@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
-    FULL_ORDER_BOOK_RESET_DELTA_SECONDS = CONSTANTS.FULL_ORDER_BOOK_RESET_DELTA_SECONDS
+    # FULL_ORDER_BOOK_RESET_DELTA_SECONDS = CONSTANTS.FULL_ORDER_BOOK_RESET_DELTA_SECONDS
     HEARTBEAT_TIME_INTERVAL = 30.0
     TRADE_STREAM_ID = 1
     DIFF_STREAM_ID = 2
@@ -43,18 +43,21 @@ class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
         return await self._connector.get_last_traded_prices(trading_pairs=trading_pairs)
 
     async def _request_order_book_snapshot(self, trading_pair: str) -> Dict[str, Any]:
-        symbol = self._connector.get_exchange_trading_pair(trading_pair)
-        params = {"depth": CONSTANTS.DEPTH_LIMIT, "symbol": symbol}
+        params = {
+            "interval": "step0",
+            "depth": CONSTANTS.DEPTH_LIMIT,
+        }
         rest_assistant = await self._api_factory.get_rest_assistant()
         data = await rest_assistant.execute_request(
-            url=web_utils.public_rest_url(path_url=CONSTANTS.DEPTH_PATH_URL, domain=self._domain),
+            url=web_utils.public_rest_url(
+                path_url=CONSTANTS.DEPTH_PATH_URL.format(symbol=trading_pair), domain=self._domain
+            ),
             params=params,
             method=RESTMethod.GET,
-            is_auth_required=True,
             throttler_limit_id=CONSTANTS.DEPTH_PATH_URL,
         )
 
-        return data
+        return data["data"]
 
     async def _subscribe_channels(self, ws: WSAssistant):
         """
@@ -62,44 +65,29 @@ class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
         :param ws: the websocket assistant used to connect to the exchange
         """
         pass
-        # try:
-        #     symbols = [
-        #         await self._connector.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
-        #         for trading_pair in self._trading_pairs
-        #     ]
-        #     for symbol in symbols:
-        #         order_book_subscribe_payload = {
-        #             "event": CONSTANTS.SUBSCRIBE_METHOD,
-        #             "params": {
-        #                 "type": f"{CONSTANTS.SUBSCRIBE_TYPE}.{self._snapshot_messages_queue_key}",
-        #                 "symbol": symbol,
-        #                 "biz": "swap",
-        #                 "interval": "0",
-        #             },
-        #             "zip": False,
-        #         }
-        #         order_book_subscribe_request: WSJSONRequest = WSJSONRequest(payload=order_book_subscribe_payload)
-        #         await ws.send(order_book_subscribe_request)
-        #         trade_subscribe_payload = {
-        #             "event": CONSTANTS.SUBSCRIBE_METHOD,
-        #             "params": {
-        #                 "type": f"{CONSTANTS.SUBSCRIBE_TYPE}.{self._trade_messages_queue_key}",
-        #                 "symbol": symbol,
-        #                 "biz": "swap",
-        #             },
-        #             "zip": False,
-        #         }
-        #         trade_subscribe_request: WSJSONRequest = WSJSONRequest(payload=trade_subscribe_payload)
-        #         await ws.send(trade_subscribe_request)
+        try:
+            for symbol in self._trading_pairs:
+                order_book_subscribe_payload = {
+                    "event": CONSTANTS.SUBSCRIBE_METHOD,
+                    "params": {
+                        "biz": CONSTANTS.SUBSCRIBE_TYPE,
+                        "type": f"{CONSTANTS.SUBSCRIBE_TYPE}.{self._snapshot_messages_queue_key}",
+                        "symbol": symbol,
+                        "interval": "0",
+                    },
+                    "zip": False,
+                }
+                order_book_subscribe_request: WSJSONRequest = WSJSONRequest(payload=order_book_subscribe_payload)
+                await ws.send(order_book_subscribe_request)
 
-        #     self.logger().info("Subscribed to public order book and trade channels...")
-        # except asyncio.CancelledError:
-        #     raise
-        # except Exception:
-        #     self.logger().error(
-        #         "Unexpected error occurred subscribing to order book trading and delta streams...", exc_info=True
-        #     )
-        #     raise
+            self.logger().info("Subscribed to public order book and trade channels...")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.logger().error(
+                "Unexpected error occurred subscribing to order book trading and delta streams...", exc_info=True
+            )
+            raise
 
     async def _connected_websocket_assistant(self) -> WSAssistant:
         ws: WSAssistant = await self._api_factory.get_ws_assistant()
@@ -146,21 +134,19 @@ class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def _parse_order_book_snapshot_message(self, raw_message: Dict[str, Any], message_queue: asyncio.Queue):
         """
         {
-            "seqId": 202935913,
-            "id": 5810207609,
-            "bids": [[]],
-            "asks": [[]],
-            "ts": 1743062282758,
-            "version": 5810207609,
-            "type": "swap.BTCUSDT.orderBook",
-            "product_name": "BTCUSDT",
-            "interval": "2"
+            'seq_id': 562,
+            'id': 5837979178,
+            'bids': [],
+            'asks': [],
+            'ts': 1751393753513,
+            'version': 5837979178,
+            'type': 'spot.orderBook',
+            'product_name': 'GGEZ1-USDT',
+            'interval': '0'
         }
         """
         if "status" not in raw_message:
-            trading_pair = await self._connector.trading_pair_associated_to_exchange_symbol(
-                symbol=raw_message["product_name"]
-            )
+            trading_pair = raw_message["product_name"]
             snapshot_timestamp: float = raw_message["ts"]
             msg = {
                 "trading_pair": trading_pair,
@@ -174,7 +160,7 @@ class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
                 metadata={
                     "trading_pair": trading_pair,
                     "channel": raw_message["type"],
-                    "seqId": raw_message["seqId"],
+                    "seqId": raw_message["seq_id"],
                     "id": raw_message["id"],
                 },
             )
@@ -195,18 +181,14 @@ class UzxAPIOrderBookDataSource(OrderBookTrackerDataSource):
             await self._send_pong(websocket_assistant=websocket_assistant)
 
     def _channel_originating_message(self, event_message: Dict[str, Any]) -> str:
-        channel = ""
-        if "status" not in event_message:
-            event_type = event_message.get("type").lower() if "type" in event_message else ""
-            requested_channel = f'{CONSTANTS.SUBSCRIBE_TYPE}.{event_message.get("product_name")}.'.lower()
-            if event_type == requested_channel + self._snapshot_messages_queue_key:
-                channel = self._snapshot_messages_queue_key
-            elif event_type == requested_channel + self._trade_messages_queue_key:
-                channel = self._trade_messages_queue_key
+        event_type = event_message.get("type").lower() if "type" in event_message else ""
+        if event_type == f"{CONSTANTS.SUBSCRIBE_TYPE}.{self._snapshot_messages_queue_key}".lower():
+            return self._snapshot_messages_queue_key
+        elif event_type == f"{CONSTANTS.SUBSCRIBE_TYPE}.{self._trade_messages_queue_key}".lower():
+            return self._trade_messages_queue_key
 
-        return channel
+        return ""
 
     async def _send_pong(self, websocket_assistant: WSAssistant):
         pong_request = WSJSONRequest(payload={"pong": int(self._time() * 1000)})
-        # self.logger().info(f"Sending pong : {pong_request}")
         await websocket_assistant.send(pong_request)

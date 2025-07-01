@@ -51,6 +51,35 @@ class UzxRateSource(RateSourceBase):
         :param exchange: The exchange instance from which to query prices.
         :param quote_token: A quote symbol, if specified only pairs with the quote symbol are included for prices
         :return: A dictionary of trading pairs and prices
+        {
+            "market": {
+                "open": "4.078",
+                "close": "4.056",
+                "low": "4.002",
+                "high": "4.141",
+                "turn_over": "1512246.22457",
+                "count": 0,
+                "vol": "372410.45",
+                "change": "-0.019",
+                "change_percent": "-0.0046625766871165644171779141104294479"
+            },
+            "index": {
+                "open": "0",
+                "close": "0",
+                "low": "0",
+                "high": "0"
+            },
+            "tag": {
+                "open": "0",
+                "close": "0",
+                "low": "0",
+                "high": "0"
+            },
+            "funding_rate": "0",
+            "pre_funding_rate": "0",
+            "symbol": "ATOM-USDT",
+            "risk_fund": "0"
+        }
         """
         pairs_prices = await exchange.get_all_pairs_prices()
         results = {}
@@ -61,7 +90,7 @@ class UzxRateSource(RateSourceBase):
                 )
             except KeyError:
                 continue  # skip pairs that we don't track
-            pair_price = pair["close"]
+            pair_price = pair["market"]["close"]
             if quote_token is not None:
                 base, quote = split_hb_trading_pair(trading_pair=trading_pair)
                 if quote != quote_token:
@@ -84,6 +113,7 @@ class UzxRateSource(RateSourceBase):
             client_config_map=client_config_map,
             uzx_api_key=connector_config.uzx_api_key.get_secret_value(),
             uzx_api_secret=connector_config.uzx_api_secret.get_secret_value(),
+            uzx_passphrase=connector_config.uzx_passphrase.get_secret_value(),
             trading_pairs=[],
             trading_required=False,
             domain=domain,

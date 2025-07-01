@@ -18,7 +18,6 @@ from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import DeductedFromReturnsTradeFee, TokenAmount, TradeFeeBase
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
-from hummingbot.core.web_assistant.connections.data_types import RESTMethod
 from hummingbot.core.web_assistant.web_assistants_factory import WebAssistantsFactory
 
 if TYPE_CHECKING:
@@ -36,12 +35,14 @@ class UzxExchange(ExchangePyBase):
         client_config_map: "ClientConfigAdapter",
         uzx_api_key: str,
         uzx_api_secret: str,
+        uzx_passphrase: str,
         trading_pairs: Optional[List[str]] = None,
         trading_required: bool = True,
         domain: str = CONSTANTS.DEFAULT_DOMAIN,
     ):
         self.api_key = uzx_api_key
         self.secret_key = uzx_api_secret
+        self.passphrase = uzx_passphrase
         self._domain = domain
         self._trading_required = trading_required
         self._trading_pairs = trading_pairs
@@ -61,7 +62,12 @@ class UzxExchange(ExchangePyBase):
 
     @property
     def authenticator(self):
-        return UzxAuth(api_key=self.api_key, secret_key=self.secret_key, time_provider=self._time_synchronizer)
+        return UzxAuth(
+            api_key=self.api_key,
+            secret_key=self.secret_key,
+            passphrase=self.passphrase,
+            time_provider=self._time_synchronizer,
+        )
 
     @property
     def name(self) -> str:
@@ -183,25 +189,24 @@ class UzxExchange(ExchangePyBase):
                 if trade_type is TradeType.BUY
                 else CONSTANTS.Order_Direction.sell.value
             )
-            symbol = self.get_exchange_trading_pair(trading_pair=trading_pair)
 
             api_data = {
-                "symbol": symbol,
-                "price": float(price),
-                "amount": float(amount),
-                "direction": side_str,
-                "type": CONSTANTS.Order_Type.limit_price.value,
+                "product_name": trading_pair,
+                "order_buy_or_sell": side_str,
+                "price": str(price),
+                "amount": str(amount),
+                "order_type": CONSTANTS.Order_Type.LIMIT_GTC.value,
             }
-            order_result = await self._api_get(
-                path_url=CONSTANTS.CREATE_NEW_ORDER_PATH_URL, params=api_data, is_auth_required=True
+            order_result = await self._api_post(
+                path_url=CONSTANTS.CREATE_NEW_ORDER_PATH_URL, data=api_data, is_auth_required=True
             )
-            if not order_result["success"]:
+            if order_result["msg"] != "success":
                 raise IOError(
                     f"Error submitting {trade_type.name.upper()} order to {self.name_cap}. Error: {order_result['message']}"
                 )
 
-            o_id = str(order_result["orderId"])
-            transact_time = order_result["serTime"]
+            o_id = str(order_result["data"]["order_id"])
+            transact_time = self._time_synchronizer.time()
         except IOError as e:
             error_description = str(e)
             is_server_overloaded = (
@@ -220,9 +225,10 @@ class UzxExchange(ExchangePyBase):
         try:
             if tracked_order.exchange_order_id is None:
                 return True
-            cancel_result = await self._api_get(
-                path_url=CONSTANTS.CANCEL_ORDER_PATH_URL.format(orderId=tracked_order.exchange_order_id),
-                limit_id=CONSTANTS.CANCEL_ORDER_PATH_URL,
+            data = {"inst_type": 1, "cancel_ord_type": 1, "order_id": tracked_order.exchange_order_id}
+            cancel_result = await self._api_put(
+                path_url=CONSTANTS.CANCEL_ORDER_PATH_URL,
+                data=data,
                 is_auth_required=True,
             )
 
@@ -239,37 +245,39 @@ class UzxExchange(ExchangePyBase):
     async def _format_trading_rules(self, exchange_info_dict: Dict[str, Any]) -> List[TradingRule]:
         """
         {
-            "product_id": 204165,
-            "product_name": "BTCUSDT",
-            "swap_value": "0.001",
-            "base_coin_id": 9075,
-            "base_coin_name": "BTC",
-            "quote_coin_id": 9747,
-            "quote_coin_name": "USDT",
-            "coin_precision": 3,
-            "price_precision": 1,
-            "price_unit": "0.1",
-            "price_range": "0.05",
-            "max_leverage": 100,
-            "max_once_limit_num": 300000,
-            "max_once_market_num": 100000,
-            "max_hold_num": 1000000,
-            "status": 1,
-            "maker_fee": "0.0004",
-            "taker_fee": "0.0006",
-            "sort": 0,
-        }
+                "ins_type": "SPOT",
+                "product_name": "GGEZ1-USDT",
+                "base_coin_name": "GGEZ1",
+                "quote_coin_name": "USDT",
+                "price_precision": 6,
+                "num_precision": 4,
+                "max_once_vol": "20000",
+                "max_once_amount": "1500",
+                "min_once_vol": "1",
+                "min_once_amount": "0.01",
+                "swap_value": "0",
+                "price_unit": "0",
+                "max_leverage": 0,
+                "max_once_limit_num": 0,
+                "max_once_market_num": 0,
+                "max_hold_num": 0,
+                "maintenance_margin_rate": "0",
+                "market_max_deeps": 20,
+                "max_book_num": 200
+            }
+
         """
         trading_pair_rules = exchange_info_dict.get("data", [])
         retval = []
-        temp_min_order_size = "0.00001"
         for rule in trading_pair_rules:
             try:
-                trading_pair = await self.trading_pair_associated_to_exchange_symbol(symbol=rule.get("product_name"))
-                min_order_size = Decimal(temp_min_order_size)  # TODO Fill minimum order size
+                trading_pair = await self.trading_pair_associated_to_exchange_symbol(
+                    symbol=self.get_hbot_trading_pair(rule.get("product_name"))
+                )
+                min_order_size = Decimal(rule.get("min_once_amount"))
+                step_size = Decimal(rule.get("min_once_amount"))
+                min_notional = Decimal(rule.get("min_once_vol"))
                 tick_size = rule.get("price_precision")
-                step_size = Decimal(temp_min_order_size)  # TODO This is not the step_size it is wrong and way to hight
-                min_notional = Decimal(temp_min_order_size)  # TODO Fill minimum order notional size
                 price_step = Decimal("1") / Decimal(str(math.pow(10, tick_size)))
                 retval.append(
                     TradingRule(
@@ -364,35 +372,29 @@ class UzxExchange(ExchangePyBase):
         trade_updates = []
         if order.exchange_order_id is not None:
             exchange_order_id = order.exchange_order_id
-            trading_pair = self.get_exchange_trading_pair(trading_pair=order.trading_pair)
+            trading_pair = order.trading_pair
 
             # get deal details for the filled order id.
             filled_orders_response = await self._get_filled_response(trading_pair)
             for filled_order in filled_orders_response:
                 # TODO: check if there is a way to get the fee
-                total_fee = 0
-                if filled_order["orderId"] == exchange_order_id:
+                if filled_order["order_id"] == exchange_order_id:
+                    total_fee = filled_order["deal_fee"]
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
                         percent_token=str(total_fee),
-                        flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
+                        flat_fees=[TokenAmount(amount=Decimal(total_fee), token=order.base_asset)],
                     )
-                    fill_time = filled_order[
-                        (
-                            "completedTime"
-                            if filled_order["status"] == CONSTANTS.OrderStatus.COMPLETED.value
-                            else "canceledTime"
-                        )
-                    ]
+                    fill_time = filled_order["finish_at"]
                     trade_update = TradeUpdate(
                         trade_id=f"T{fill_time}",
                         client_order_id=order.client_order_id,
                         exchange_order_id=str(exchange_order_id),
                         trading_pair=trading_pair,
                         fee=fee,
-                        fill_base_amount=Decimal(filled_order["tradedAmount"]),
-                        fill_quote_amount=Decimal(filled_order["turnover"]),
+                        fill_base_amount=Decimal(filled_order["deal_number"]),
+                        fill_quote_amount=Decimal(filled_order["filled_quote_amount"]),
                         fill_price=Decimal(filled_order["price"]),
                         fill_timestamp=fill_time,
                     )
@@ -404,15 +406,9 @@ class UzxExchange(ExchangePyBase):
             # Query unfilled or partially filled orders.
             unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(trading_pair)
             for unfilled_order in unfilled_or_partially_filled_response:
-                if unfilled_order["orderId"] == exchange_order_id:
+                if unfilled_order["order_id"] == exchange_order_id:
 
-                    fill_timestamp = unfilled_order["time"]
-                    order_details = unfilled_order["detail"]
-                    # TODO: check if there is a way to get the fee
-                    total_fee = 0
-                    if len(order_details) > 0:
-                        fill_timestamp = order_details[-1]["time"]
-
+                    total_fee = filled_order["deal_fee"]
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
@@ -420,15 +416,15 @@ class UzxExchange(ExchangePyBase):
                         flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
                     )
                     trade_update = TradeUpdate(
-                        trade_id=f"T{fill_timestamp}",
+                        trade_id=f"T{unfilled_order['created_at']}",
                         client_order_id=order.client_order_id,
                         exchange_order_id=str(exchange_order_id),
                         trading_pair=trading_pair,
                         fee=fee,
-                        fill_base_amount=Decimal(unfilled_order["tradedAmount"]),
-                        fill_quote_amount=Decimal(unfilled_order["turnover"]),
+                        fill_base_amount=Decimal(unfilled_order["deal_number"]),
+                        fill_quote_amount=Decimal(unfilled_order["filled_quote_amount"]),
                         fill_price=Decimal(unfilled_order["price"]),
-                        fill_timestamp=fill_timestamp,
+                        fill_timestamp=unfilled_order["finish_at"],
                     )
                     trade_updates.append(trade_update)
 
@@ -439,7 +435,7 @@ class UzxExchange(ExchangePyBase):
             raise ValueError("Cannot request order status without exchange_order")
 
         exchange_order_id = tracked_order.exchange_order_id
-        trading_pair = self.get_exchange_trading_pair(trading_pair=tracked_order.trading_pair)
+        trading_pair = tracked_order.trading_pair
         new_state = None
         update_timestamp = None
 
@@ -447,29 +443,22 @@ class UzxExchange(ExchangePyBase):
         filled_orders_response = await self._get_filled_response(trading_pair)
 
         for filled_order in filled_orders_response:
-            if filled_order["orderId"] == exchange_order_id:
-                status = filled_order["status"]
-                new_state = CONSTANTS.ORDER_STATE.get(
-                    "FILLED" if status == CONSTANTS.OrderStatus.COMPLETED.value else "CANCELED"
-                )
-                update_timestamp = filled_order.get(
-                    "completedTime" if status == CONSTANTS.OrderStatus.COMPLETED.value else "canceledTime"
-                )
+            if filled_order["order_id"] == exchange_order_id:
+                new_state = CONSTANTS.ORDER_STATE[filled_order["status"]]
+                update_timestamp = filled_order["finish_at"]
+                break
 
         if new_state is None:
             # Query unfilled or partially filled orders.
             unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(trading_pair)
             for unfilled_order in unfilled_or_partially_filled_response:
-                if unfilled_order["orderId"] == exchange_order_id:
-                    if unfilled_order["tradedAmount"] == 0:
-                        new_state = CONSTANTS.ORDER_STATE["OPEN"]
-                    else:
-                        new_state = CONSTANTS.ORDER_STATE["PARTIALLY_FILLED"]
+                if unfilled_order["order_id"] == exchange_order_id:
+                    new_state = CONSTANTS.ORDER_STATE[unfilled_order["status"]]
                     update_timestamp = unfilled_order["timestamp"]
                     break
 
         # if not found in the open orders or filled orders then the order is canceled
-        new_state = new_state or CONSTANTS.ORDER_STATE["CANCELED"]
+        new_state = new_state or CONSTANTS.ORDER_STATE[CONSTANTS.OrderStatus.CANCELED.value]
         update_timestamp = update_timestamp or self.current_timestamp
 
         order_update = OrderUpdate(
@@ -485,19 +474,15 @@ class UzxExchange(ExchangePyBase):
     async def _update_balances(self):
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
-        account_info = await self._api_get(
-            path_url=CONSTANTS.BALANCES_PATH_URL, params={"symbol": ""}, is_auth_required=True
-        )
-        if not account_info["success"]:
+        account_info = await self._api_get(path_url=CONSTANTS.BALANCES_PATH_URL, is_auth_required=True)
+        if account_info["msg"] != "success":
             return
 
         assets = account_info["data"]
         for asset_data in assets:
-            if asset_data["totalBalance"] == 0:
-                continue
-            asset_name = asset_data["coin"]["unit"]
-            free_balance = Decimal(asset_data["balance"])
-            total_balance = Decimal(asset_data["totalBalance"])
+            asset_name = asset_data["coin"]
+            free_balance = Decimal(asset_data["available_balance"])
+            total_balance = Decimal(asset_data["balance"])
             self._account_available_balances[asset_name] = free_balance
             self._account_balances[asset_name] = total_balance
             remote_asset_names.add(asset_name)
@@ -508,86 +493,96 @@ class UzxExchange(ExchangePyBase):
             del self._account_balances[asset_name]
 
     async def _make_trading_pairs_request(self) -> Any:
-        exchange_info = await self._api_get(path_url=self.trading_pairs_request_path)
-        exchange_info["data"].extend(CONSTANTS.CUSTOMER_MARKET_PAIR)
+        params = {"ins_type": "SPOT"}
+        exchange_info = await self._api_get(path_url=self.trading_pairs_request_path, params=params)
         return exchange_info
 
     async def _make_trading_rules_request(self) -> Any:
-        exchange_info = await self._api_get(path_url=self.trading_rules_request_path)
-        exchange_info["data"].extend(CONSTANTS.CUSTOMER_MARKET_PAIR)
+        params = {"ins_type": "SPOT"}
+        exchange_info = await self._api_get(path_url=self.trading_rules_request_path, params=params)
         return exchange_info
 
     def _initialize_trading_pair_symbols_from_exchange_info(self, exchange_info: Dict[str, Any]):
+        """
+        {
+            "ins_type": "SPOT",
+            "product_name": "BTC-USDT",
+            "base_coin_name": "BTC",
+            "quote_coin_name": "USDT",
+            "price_precision": 2,
+            "num_precision": 5,
+            "max_once_vol": "10",
+            "max_once_amount": "1000000",
+            "min_once_vol": "0.00001",
+            "min_once_amount": "5",
+            "swap_value": "0",
+            "price_unit": "0",
+            "max_leverage": 0,
+            "max_once_limit_num": 0,
+            "max_once_market_num": 0,
+            "max_hold_num": 0,
+            "maintenance_margin_rate": "0",
+            "market_max_deeps": 20,
+            "max_book_num": 200
+        },
+        """
         mapping = bidict()
         for symbol_data in exchange_info["data"]:
-            mapping[symbol_data["product_name"]] = combine_to_hb_trading_pair(
-                base=symbol_data["base_coin_name"], quote=symbol_data["quote_coin_name"]
-            )
+            if symbol_data["ins_type"] == CONSTANTS.Products_Type.spot.value:
+                mapping[self.get_hbot_trading_pair(symbol_data["product_name"])] = combine_to_hb_trading_pair(
+                    base=symbol_data["base_coin_name"], quote=symbol_data["quote_coin_name"]
+                )
         self._set_trading_pair_symbol_map(mapping)
 
     async def _get_last_traded_price(self, trading_pair: str) -> float:
-        # Symbol should be in the format of "BTC/USDT"
-        params = {"symbol": self.get_exchange_trading_pair(trading_pair=trading_pair), "size": 1}
-        resp_json = await self._api_request(
-            method=RESTMethod.GET, path_url=CONSTANTS.LATEST_TRADES_PATH_URL, params=params, is_auth_required=True
+        resp_json = await self._api_get(
+            path_url=CONSTANTS.PAIR_TICKER_PATH_URL.format(symbol=trading_pair), limit_id=CONSTANTS.PAIR_TICKER_PATH_URL
         )
-        return float(resp_json[0]["price"])
+        return float(resp_json["data"]["market"]["close"])
 
     def get_exchange_trading_pair(self, trading_pair: str) -> str:
         return trading_pair.replace("-", "/")
 
     def get_hbot_trading_pair(self, trading_pair: str) -> str:
-        return trading_pair.replace("/", "")
+        return trading_pair.replace("-", "")
 
     async def _get_unfilled_or_partially_filled_response(self, market: str):
-        unfilled_or_partially_filled_response = None
+        cached_entry = self._unfilled_or_partially_filled_responses_cache.get(market)
+        if cached_entry and (self.current_timestamp - cached_entry["timestamp"] < CONSTANTS.ORDER_REQUESTS_CACHE_TIME):
+            return cached_entry["response"]
 
-        if self._unfilled_or_partially_filled_responses_cache.get(market) is not None:
-            if (
-                self._unfilled_or_partially_filled_responses_cache[market]["timestamp"]
-                > self.current_timestamp - CONSTANTS.ORDER_REQUESTS_CACHE_TIME
-            ):
-                unfilled_or_partially_filled_response = self._unfilled_or_partially_filled_responses_cache[market][
-                    "response"
-                ]
-        if unfilled_or_partially_filled_response is None:
-            unfilled_or_partially_filled_response = await self._api_get(
-                path_url=CONSTANTS.CURRENT_ORDERS_PATH_URL,
-                params={"symbol": market, "pageNo": 1, "pageSize": 100},
-                is_auth_required=True,
-            )
-            self._unfilled_or_partially_filled_responses_cache[market] = {
-                "response": unfilled_or_partially_filled_response,
-                "timestamp": self.current_timestamp,
-            }
-        return unfilled_or_partially_filled_response
-
-    async def _get_filled_response(self, market: str):
-        filled_response = None
-
-        if self._filled_responses_cache.get(market) is not None:
-            if (
-                self._filled_responses_cache[market]["timestamp"]
-                > self.current_timestamp - CONSTANTS.ORDER_REQUESTS_CACHE_TIME
-            ):
-                filled_response = self._filled_responses_cache[market]["response"]
-        if filled_response is None:
-            filled_response = await self._api_get(
-                path_url=CONSTANTS.FILLED_ORDERS_PATH_URL,
-                params={"symbol": market, "pageNo": 1, "pageSize": 100},
-                is_auth_required=True,
-            )
-            self._filled_responses_cache[market] = {
-                "response": filled_response,
-                "timestamp": self.current_timestamp,
-            }
-        return filled_response
-
-    async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
-        pairs_prices = await self._api_get(
-            path_url=CONSTANTS.TICKERS_PATH_URL,
+        api_response = await self._api_get(
+            path_url=CONSTANTS.CURRENT_ORDERS_PATH_URL,
+            params={"product_name": market},
             is_auth_required=True,
         )
-        if pairs_prices:
-            return pairs_prices
+        filled_data = api_response.get("data")
+
+        self._unfilled_or_partially_filled_responses_cache[market] = {
+            "response": filled_data,
+            "timestamp": self.current_timestamp,
+        }
+        return filled_data
+
+    async def _get_filled_response(self, market: str):
+        cached_entry = self._filled_responses_cache.get(market)
+        if cached_entry and (self.current_timestamp - cached_entry["timestamp"] < CONSTANTS.ORDER_REQUESTS_CACHE_TIME):
+            return cached_entry["response"]
+
+        api_response = await self._api_get(
+            path_url=CONSTANTS.FILLED_ORDERS_PATH_URL,
+            is_auth_required=True,
+        )
+        filled_data = api_response.get("data")
+
+        self._filled_responses_cache[market] = {
+            "response": filled_data,
+            "timestamp": self.current_timestamp,
+        }
+        return filled_data
+
+    async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
+        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKERS_PATH_URL)
+        if pairs_prices["data"]:
+            return pairs_prices["data"]
         return []

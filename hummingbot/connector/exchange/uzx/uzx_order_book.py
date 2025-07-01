@@ -18,35 +18,33 @@ class UzxOrderBook(OrderBook):
         :param timestamp: the snapshot timestamp
         :param metadata: a dictionary with extra information to add to the snapshot data
         :return: a snapshot message with the snapshot information received from the exchange
-
         {
-        "ask": {
-            "minAmount": 0.0297786,
-            "highestPrice": 92210.0,
-            "symbol": "BTC/USDT",
-            "lowestPrice": 85832.42,
-            "maxAmount": 1.9477029,
-            "items": [
-                        {
-                            "price": 85832.42,
-                            "amount": 0.20450935
-                        }
-                    ],
-                "direction": "SELL"
-            },
-        "bid": {
-            "minAmount": 0.00324297,
-            "highestPrice": 85832.4,
-            "symbol": "BTC/USDT",
-            "lowestPrice": 79503.0,
-            "maxAmount": 1.9938553,
-            "items": [
-                        {
-                            "price": 85404.55,
-                            "amount": 0.22750804
-                        }
-                    ],
-                "direction": "BUY"
+            "code": 200,
+            "interval": "step0",
+            "msg": "success",
+            "status": "ok",
+            "ts": 1750844216172,
+            "type": "spot.orderBook",
+            "data": {
+                "seq_id": 48,
+                "id": 5836147386,
+                "bids": [
+                    [
+                        "0.087",
+                        "7500"
+                    ]
+                ],
+                "asks": [
+                    [
+                        "0.0877",
+                        "20000"
+                    ]
+                ],
+                "ts": 1750844215897,
+                "version": 5836147386,
+                "type": "spot.orderBook",
+                "product_name": "GGEZ1-USDT",
+                "interval": "0"
             }
         }
         """
@@ -59,8 +57,8 @@ class UzxOrderBook(OrderBook):
                 "trading_pair": msg["trading_pair"],
                 "update_id": int(timestamp),
                 "instrument_id": int(timestamp),
-                "bids": [[bid["price"], bid["amount"]] for bid in msg["bid"]["items"]],
-                "asks": [[ask["price"], ask["amount"]] for ask in msg["ask"]["items"]],
+                "bids": msg["bids"],
+                "asks": msg["asks"],
             },
             timestamp=timestamp,
         )
