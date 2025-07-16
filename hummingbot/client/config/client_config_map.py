@@ -473,6 +473,17 @@ class MexcRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="mexc")
     model_config = ConfigDict(title="mexc")
 
+class CoinstoreRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="coinstore")
+    model_config = ConfigDict(title="coinstore")
+
+class UzxRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="uzx")
+    model_config = ConfigDict(title="uzx")
+
+class P2bRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="p2b")
+    model_config = ConfigDict(title="p2b")
 
 class CubeRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="cube")
@@ -672,6 +683,9 @@ RATE_SOURCE_MODES = {
     HyperliquidRateSourceMode.model_config["title"]: HyperliquidRateSourceMode,
     DeriveRateSourceMode.model_config["title"]: DeriveRateSourceMode,
     MexcRateSourceMode.model_config["title"]: MexcRateSourceMode,
+    CoinstoreRateSourceMode.model_config["title"]: CoinstoreRateSourceMode,
+    UzxRateSourceMode.model_config["title"]: UzxRateSourceMode,
+    P2bRateSourceMode.model_config["title"]: P2bRateSourceMode
 }
 
 
