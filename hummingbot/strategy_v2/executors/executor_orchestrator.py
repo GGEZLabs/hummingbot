@@ -13,6 +13,8 @@ from hummingbot.strategy_v2.executors.dca_executor.data_types import DCAExecutor
 from hummingbot.strategy_v2.executors.dca_executor.dca_executor import DCAExecutor
 from hummingbot.strategy_v2.executors.grid_executor.data_types import GridExecutorConfig
 from hummingbot.strategy_v2.executors.grid_executor.grid_executor import GridExecutor
+from hummingbot.strategy_v2.executors.order_executor.data_types import OrderExecutorConfig
+from hummingbot.strategy_v2.executors.order_executor.order_executor import OrderExecutor
 from hummingbot.strategy_v2.executors.position_executor.data_types import PositionExecutorConfig
 from hummingbot.strategy_v2.executors.position_executor.position_executor import PositionExecutor
 from hummingbot.strategy_v2.executors.twap_executor.data_types import TWAPExecutorConfig
@@ -133,6 +135,8 @@ class ExecutorOrchestrator:
             executor = TWAPExecutor(self.strategy, executor_config, self.executors_update_interval)
         elif isinstance(executor_config, XEMMExecutorConfig):
             executor = XEMMExecutor(self.strategy, executor_config, self.executors_update_interval)
+        elif isinstance(executor_config, OrderExecutorConfig):
+            executor = OrderExecutor(self.strategy, executor_config, self.executors_update_interval)
         else:
             raise ValueError("Unsupported executor config type")
 

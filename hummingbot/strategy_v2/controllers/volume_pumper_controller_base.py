@@ -29,7 +29,7 @@ class StrategyStatus(Enum):
     UNDERBALANCED = 3
 
 
-class VolumePumperConfig(ControllerConfigBase):
+class VolumePumperConfigBase(ControllerConfigBase):
     controller_type: str = "market_making"
     # candles_config: List[CandlesConfig] = []
     exchange: str = Field(
@@ -88,7 +88,7 @@ class VolumePumperConfig(ControllerConfigBase):
 
 
 class VolumePumperControllerBase(ControllerBase):
-    def __init__(self, config: VolumePumperConfig, *args, **kwargs):
+    def __init__(self, config: VolumePumperConfigBase, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         # config data
         self.controller_id = config.id
@@ -101,7 +101,7 @@ class VolumePumperControllerBase(ControllerBase):
         self.minimum_ask_bid_spread_BS = config.minimum_ask_bid_spread
         self.max_random_delay = config.max_random_delay
         self.periodic_report_interval = config.periodic_report_interval
-        self.active_order_total_lifespan = 40
+        self.active_order_total_lifespan = 20
         # strategy data
         self.strategy_status = StrategyStatus.NOT_INITIALIZED
         self.price_source = PriceType.MidPrice
@@ -148,7 +148,7 @@ class VolumePumperControllerBase(ControllerBase):
         """
         actions = []
         actions.extend(self.create_actions_proposal())
-        actions.extend(self.stop_actions_proposal())
+        # actions.extend(self.stop_actions_proposal())
         return actions
 
     def stop_actions_proposal(self) -> List[ExecutorAction]:
@@ -161,9 +161,11 @@ class VolumePumperControllerBase(ControllerBase):
 
     def executors_to_cancel(self) -> List[ExecutorAction]:
         executors_to_refresh = self.filter_executors(
-            executors=self.executors_info, filter_func=lambda x: not x.is_trading and x.is_active
+            executors=self.executors_info,
+            filter_func=lambda x: not x.is_trading
+            and x.is_active
+            and self.current_timestamp - x.timestamp > self.active_order_total_lifespan,
         )
-
         return [
             StopExecutorAction(controller_id=self.config.id, executor_id=executor.id)
             for executor in executors_to_refresh
@@ -305,7 +307,7 @@ class VolumePumperControllerBase(ControllerBase):
         )
 
     def is_order_amount_below_minimum_order_amount(self, order_amount):
-        if order_amount > self.order_lower_amount:
+        if order_amount >= self.order_lower_amount:
             return False
         notification = (
             f"\nNOTIFICATION : Stopping strategy initiated"
@@ -349,7 +351,7 @@ class VolumePumperControllerBase(ControllerBase):
             return
         for client_order_id in in_flight_orders:
             if (
-                self.current_timestamp - in_flight_orders[client_order_id].last_update_timestamp
+                self.current_timestamp - in_flight_orders[client_order_id].last_update_times
                 < self.active_order_total_lifespan
             ):
                 return
