@@ -55,7 +55,7 @@ class P2bAuth(AuthBase):
         request_params["request"] = request_url.replace(CONSTANTS.REST_URL, "")
 
         timestamp = int(self.time_provider.time() * 1e3)
-        request_params["nonce"] = timestamp + randint(1, 1000)
+        request_params["nonce"] = timestamp + randint(1, 100000)
 
         return request_params
 

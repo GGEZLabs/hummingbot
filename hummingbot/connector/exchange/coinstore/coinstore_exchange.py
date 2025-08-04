@@ -396,7 +396,7 @@ class CoinstoreExchange(ExchangePyBase):
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
                         percent=Decimal(trade["acturalFeeRate"]),
-                        percent_token=trade["acturalFeeRate"],
+                        percent_token=order.base_asset,
                         flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=order.base_asset)],
                     )
                     price = Decimal(trade["execAmt"]) / Decimal(trade["execQty"])

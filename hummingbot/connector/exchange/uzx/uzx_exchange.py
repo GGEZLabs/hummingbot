@@ -383,7 +383,7 @@ class UzxExchange(ExchangePyBase):
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
-                        percent_token=str(total_fee),
+                        percent_token=str(order.base_asset),
                         flat_fees=[TokenAmount(amount=Decimal(total_fee), token=order.base_asset)],
                     )
                     fill_time = filled_order["finish_at"]
@@ -412,7 +412,7 @@ class UzxExchange(ExchangePyBase):
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
-                        percent_token=str(total_fee),
+                        percent_token=str(order.base_asset),
                         flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
                     )
                     trade_update = TradeUpdate(

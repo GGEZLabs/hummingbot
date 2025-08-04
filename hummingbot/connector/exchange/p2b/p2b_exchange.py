@@ -410,7 +410,7 @@ class P2bExchange(ExchangePyBase):
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
-                        percent_token=str(total_fee),
+                        percent_token=str(order.base_asset),
                         flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
                     )
                     trade_update = TradeUpdate(
@@ -457,7 +457,7 @@ class P2bExchange(ExchangePyBase):
                     fee = TradeFeeBase.new_spot_fee(
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
-                        percent_token=trade["takerFee"] if trade["side"] == "buy" else trade["makerFee"],
+                        percent_token= order.base_asset,
                         flat_fees=[TokenAmount(amount=Decimal(trade["dealFee"]), token=order.base_asset)],
                     )
                     trade_update = TradeUpdate(
