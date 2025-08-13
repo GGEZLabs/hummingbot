@@ -9,10 +9,10 @@ from hummingbot.connector.utils import split_hb_trading_pair
 from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
 from hummingbot.core.data_type.order_candidate import OrderCandidate
 from hummingbot.strategy.script_strategy_base import ScriptStrategyBase
+from hummingbot.strategy_v2.utils.custom_volume_pumper_utils import CustomVolumePumperUtils
+from hummingbot.strategy_v2.utils.report_management import ReportManagement
+from hummingbot.strategy_v2.utils.risk_management import RiskManagement
 from scripts.utils.custom_volume_pumper_config import CustomVolumePumperConfig
-from scripts.utils.custom_volume_pumper_utils import CustomVolumePumperUtils
-from scripts.utils.report_management import ReportManagement
-from scripts.utils.risk_management import RiskManagement
 
 
 class CustomVolumePumperStatus(Enum):
@@ -141,7 +141,7 @@ class CustomVolumePumper(ScriptStrategyBase):
                 notification = "\nWARNING : Tight Spread."
                 notification += f"\nTight spread count: {self.report_management.interval_tight_spread_count}"
                 notification += f"\nSpread {bid_ask_spread}"
-                notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+                notification += f"\nOrder placing is delayed by {self.random_delay + self.delay_order_time} seconds"
                 self.logger().notify(notification)
             self.start_orders_delay()
             return
@@ -155,7 +155,7 @@ class CustomVolumePumper(ScriptStrategyBase):
             self.start_orders_delay()
             notification = "\nNOTIFICATION : Last Traded Price Has Changed."
             notification += f"\nLast trade price: {self.last_trade_price}"
-            notification += f"\nOrder placing is delayed by {self.random_delay+self.delay_order_time} seconds"
+            notification += f"\nOrder placing is delayed by {self.random_delay + self.delay_order_time} seconds"
             self.logger().info(notification)
             return
 
@@ -203,7 +203,7 @@ class CustomVolumePumper(ScriptStrategyBase):
 
         # update last mid price timestamp
         self.start_orders_delay()
-        self.logger().info(f"\nNext order is delayed by {self.random_delay+self.delay_order_time} seconds")
+        self.logger().info(f"\nNext order is delayed by {self.random_delay + self.delay_order_time} seconds")
 
     def place_order(self, connector_name: str, order: OrderCandidate):
         if order.order_side == TradeType.SELL:
