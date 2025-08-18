@@ -315,10 +315,14 @@ class DBOtherMode(DBMode):
         default="dbname",
         json_schema_extra={"prompt": lambda cm: "Please enter your DB name"},
     )
+    db_schema: str = Field(
+        default="db_schema",
+        json_schema_extra={"prompt": lambda cm: "Please enter the name of your DB schema"},
+    )
     model_config = ConfigDict(title="other_db_engine")
 
     def get_url(self, db_path: str) -> str:
-        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3D{self.db_schema}"
 
     @field_validator("db_engine")
     @classmethod
@@ -473,17 +477,21 @@ class MexcRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="mexc")
     model_config = ConfigDict(title="mexc")
 
+
 class CoinstoreRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="coinstore")
     model_config = ConfigDict(title="coinstore")
+
 
 class UzxRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="uzx")
     model_config = ConfigDict(title="uzx")
 
+
 class P2bRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="p2b")
     model_config = ConfigDict(title="p2b")
+
 
 class CubeRateSourceMode(ExchangeRateSourceModeBase):
     name: str = Field(default="cube")
