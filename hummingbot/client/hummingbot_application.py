@@ -29,6 +29,7 @@ from hummingbot.core.utils.trading_pair_fetcher import TradingPairFetcher
 from hummingbot.exceptions import ArgumentParserError
 from hummingbot.logger import HummingbotLogger
 from hummingbot.logger.application_warning import ApplicationWarning
+from hummingbot.notifier.telegram_notifier import TelegramNotifier
 from hummingbot.remote_iface.mqtt import MQTTGateway
 
 s_logger = None
@@ -49,7 +50,9 @@ class HummingbotApplication(*commands):
         return s_logger
 
     @classmethod
-    def main_application(cls, client_config_map: Optional[ClientConfigAdapter] = None, headless_mode: bool = False) -> "HummingbotApplication":
+    def main_application(
+        cls, client_config_map: Optional[ClientConfigAdapter] = None, headless_mode: bool = False
+    ) -> "HummingbotApplication":
         if cls._main_app is None:
             cls._main_app = HummingbotApplication(client_config_map=client_config_map, headless_mode=headless_mode)
         return cls._main_app
@@ -59,9 +62,7 @@ class HummingbotApplication(*commands):
             client_config_map or load_client_config_map_from_file()
         )
         self.headless_mode = headless_mode
-        self.ssl_config_map: SSLConfigMap = (  # type-hint enables IDE auto-complete
-            load_ssl_config_map_from_file()
-        )
+        self.ssl_config_map: SSLConfigMap = load_ssl_config_map_from_file()  # type-hint enables IDE auto-complete
         self.ev_loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
         # Initialize core trading functionality
         self.trading_core = TradingCore(self.client_config_map)
@@ -101,7 +102,7 @@ class HummingbotApplication(*commands):
             input_handler=self._handle_command,
             bindings=load_key_bindings(self),
             completer=load_completer(self),
-            command_tabs=command_tabs
+            command_tabs=command_tabs,
         )
 
     @property
@@ -163,7 +164,7 @@ class HummingbotApplication(*commands):
 
     def _handle_command(self, raw_command: str):
         # unset to_stop_config flag it triggered before loading any command (UI mode only)
-        if not self.headless_mode and hasattr(self, 'app') and self.app.to_stop_config:
+        if not self.headless_mode and hasattr(self, "app") and self.app.to_stop_config:
             self.app.to_stop_config = False
 
         raw_command = raw_command.strip()
@@ -184,7 +185,7 @@ class HummingbotApplication(*commands):
                     return
 
                 # regular command
-                if self.headless_mode and not hasattr(self, 'parser'):
+                if self.headless_mode and not hasattr(self, "parser"):
                     self.notify("Command parsing not available in headless mode")
                     return
 
@@ -257,6 +258,26 @@ class HummingbotApplication(*commands):
 
     def _initialize_notifiers(self):
         """Initialize notifiers by delegating to TradingCore."""
+        telegram_mode = self.client_config_map.telegram_mode
+        if (
+            telegram_mode.telegram_mode_enabled
+            and all(
+                [
+                    telegram_mode.telegram_mode_token,
+                    telegram_mode.telegram_mode_chat_id,
+                ]
+            )
+            and TelegramNotifier not in [type(n) for n in self.notifiers]
+        ):
+            self.notifiers.extend(
+                [
+                    TelegramNotifier(
+                        telegram_mode.telegram_mode_token,
+                        telegram_mode.telegram_mode_chat_id,
+                        self,
+                    )
+                ]
+            )
         for notifier in self.trading_core.notifiers:
             notifier.start()
 
