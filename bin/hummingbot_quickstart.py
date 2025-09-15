@@ -112,6 +112,7 @@ async def quick_start(args: argparse.Namespace, secrets_manager: BaseSecretsMana
 
     # Create unified application that handles both headless and UI modes
     hb = HummingbotApplication.main_application(client_config_map=client_config_map, headless_mode=args.headless)
+    hb._initialize_notifiers()
 
     # Load and start strategy if provided
     if args.config_file_name is not None:

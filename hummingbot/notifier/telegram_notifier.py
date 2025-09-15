@@ -118,7 +118,8 @@ class TelegramNotifier(NotifierBase):
             input_text = update.message.text.strip()
             output = f"\n[Telegram Input] {input_text}"
 
-            self._hb.app.log(output)
+            if not self._hb.headless_mode:
+                self._hb.app.log(output)
 
             # if the command does starts with any disabled commands
             if any([input_text.lower().startswith(dc) for dc in DISABLED_COMMANDS]):

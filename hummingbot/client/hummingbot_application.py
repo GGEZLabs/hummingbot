@@ -87,7 +87,9 @@ class HummingbotApplication(*commands):
         else:
             # In headless mode, we don't initialize UI components
             self.app = None
-            self.parser = None
+            # self.parser = None
+            command_tabs = self.init_command_tabs()
+            self.parser: ThrowingArgumentParser = load_parser(self, command_tabs)
 
         # MQTT Bridge (always available in both modes)
         if self.client_config_map.mqtt_bridge.mqtt_autostart:
