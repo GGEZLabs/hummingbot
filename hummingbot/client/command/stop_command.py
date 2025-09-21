@@ -57,11 +57,11 @@ class StopCommand:
             self.trading_core.markets_recorder = None
 
         # Clear strategy references
-        self.trading_core.strategy = None
-        self.trading_core.strategy_name = None
-        self.trading_core.strategy_config_map = None
-        self.trading_core._strategy_file_name = None
-        self.trading_core._config_source = None
-        self.trading_core._config_data = None
+        # self.trading_core.strategy = None
+        # self.trading_core.strategy_name = None
+        # self.trading_core.strategy_config_map = None
+        # self.trading_core._strategy_file_name = None
+        # self.trading_core._config_source = None
+        # self.trading_core._config_data = None
 
         self.notify("Hummingbot stopped.")
