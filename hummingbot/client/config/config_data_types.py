@@ -24,7 +24,7 @@ class ClientFieldData:
 
 
 class BaseClientModel(BaseModel):
-    model_config = ConfigDict(validate_assignment=True, title=None, extra="forbid", json_encoders={
+    model_config = ConfigDict(validate_assignment=True, title=None, extra="ignore", json_encoders={
         datetime: lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S"),
     })
 
