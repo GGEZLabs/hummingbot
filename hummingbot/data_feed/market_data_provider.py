@@ -11,6 +11,7 @@ from hummingbot.client.config.config_helpers import (
     ClientConfigAdapter,
     api_keys_from_connector_config_map,
     get_connector_class,
+    load_client_config_map_from_file,
 )
 from hummingbot.client.settings import AllConnectorSettings
 from hummingbot.connector.connector_base import ConnectorBase
@@ -214,7 +215,10 @@ class MarketDataProvider:
             self.logger().error(f"Connector {connector_name} not found")
             raise ValueError(f"Connector {connector_name} not found")
 
-        client_config_map = ClientConfigAdapter(ClientConfigMap())
+        client_config_map_from_file = load_client_config_map_from_file()
+        default_client_config_map = ClientConfigMap()
+        default_client_config_map.rate_oracle_source = client_config_map_from_file.hb_config.rate_oracle_source
+        client_config_map = ClientConfigAdapter(default_client_config_map)
         init_params = conn_setting.conn_init_parameters(
             trading_pairs=[],
             trading_required=False,
