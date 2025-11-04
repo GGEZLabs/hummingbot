@@ -279,9 +279,8 @@ class P2bExchange(ExchangePyBase):
                         min_notional_size=Decimal(min_notional),
                     )
                 )
-
-            except Exception as e:
-                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.", e)
+            except Exception:
+                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
         return retval
 
     async def _update_trading_fees(self):
