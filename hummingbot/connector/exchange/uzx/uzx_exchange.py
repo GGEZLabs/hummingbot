@@ -202,7 +202,7 @@ class UzxExchange(ExchangePyBase):
             )
             if order_result["msg"] != "success":
                 raise IOError(
-                    f"Error submitting {trade_type.name.upper()} order to {self.name_cap}. Error: {order_result['message']}"
+                    f"Error submitting {trade_type.name.upper()} order to {self.name_cap}. Error: {order_result['code']}"
                 )
 
             o_id = str(order_result["data"]["order_id"])
@@ -233,7 +233,7 @@ class UzxExchange(ExchangePyBase):
             )
 
             # return True if the order is successfully cancelled else False
-            return cancel_result.get("success")
+            return cancel_result.get("msg") == "success"
         # if the order is not found then with status 400 and error code 2020 return True
         except IOError as e:
             error_description = str(e)
@@ -289,8 +289,8 @@ class UzxExchange(ExchangePyBase):
                     )
                 )
 
-            except Exception as e:
-                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.", e)
+            except Exception:
+                self.logger().exception(f"Error parsing the trading pair rule {rule}. Skipping.")
         return retval
 
     async def _update_trading_fees(self):
@@ -413,7 +413,7 @@ class UzxExchange(ExchangePyBase):
                         fee_schema=self.trade_fee_schema(),
                         trade_type=order.trade_type,
                         percent_token=str(total_fee),
-                        flat_fees=[TokenAmount(amount=total_fee, token=order.base_asset)],
+                        flat_fees=[TokenAmount(amount=Decimal(total_fee), token=order.base_asset)],
                     )
                     trade_update = TradeUpdate(
                         trade_id=f"T{unfilled_order['created_at']}",
@@ -454,7 +454,7 @@ class UzxExchange(ExchangePyBase):
             for unfilled_order in unfilled_or_partially_filled_response:
                 if unfilled_order["order_id"] == exchange_order_id:
                     new_state = CONSTANTS.ORDER_STATE[unfilled_order["status"]]
-                    update_timestamp = unfilled_order["timestamp"]
+                    update_timestamp = unfilled_order["created_at"]
                     break
 
         # if not found in the open orders or filled orders then the order is canceled
