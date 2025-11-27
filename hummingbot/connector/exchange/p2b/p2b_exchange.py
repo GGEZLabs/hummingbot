@@ -553,10 +553,14 @@ class P2bExchange(ExchangePyBase):
             )
         self._set_trading_pair_symbol_map(mapping)
 
-    async def _get_last_traded_price(self, trading_pair: str) -> float:
+    async def _get_ticker_info(self, trading_pair: str) -> Dict[str, Any]:
         params = {"market": self.get_exchange_trading_pair(trading_pair=trading_pair)}
         resp_json = await self._api_request(method=RESTMethod.GET, path_url=CONSTANTS.TICKER_PATH_URL, params=params)
-        return float(resp_json["result"]["last"])
+        return resp_json["result"]
+
+    async def _get_last_traded_price(self, trading_pair: str) -> float:
+        ticker_info = await self._get_ticker_info(trading_pair)
+        return float(ticker_info["last"])
 
     def get_exchange_trading_pair(self, trading_pair: str) -> str:
         return trading_pair.replace("-", "_")
@@ -586,3 +590,7 @@ class P2bExchange(ExchangePyBase):
                 "timestamp": self.current_timestamp,
             }
         return unfilled_or_partially_filled_response
+
+    async def get_volume(self, trading_pair: str) -> Decimal:
+        ticker_info = await self._get_ticker_info(trading_pair)
+        return Decimal(ticker_info["deal"])

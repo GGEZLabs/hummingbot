@@ -119,7 +119,7 @@ class CoinstoreExchange(ExchangePyBase):
         return [OrderType.LIMIT, OrderType.LIMIT_MAKER, OrderType.MARKET]
 
     async def get_all_pairs_prices(self) -> List[Dict[str, str]]:
-        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKER_BOOK_PATH_URL)
+        pairs_prices = await self._api_get(path_url=CONSTANTS.TICKER_PRICE_PATH_URL)
         if pairs_prices["code"] == CONSTANTS.API_SUCCESS_CODE:
             return pairs_prices["data"]
         return []
@@ -452,6 +452,8 @@ class CoinstoreExchange(ExchangePyBase):
         remote_asset_names = set()
 
         account_info = await self._api_post(path_url=CONSTANTS.ACCOUNTS_PATH_URL, is_auth_required=True, data={})
+        if account_info["code"] != CONSTANTS.API_SUCCESS_CODE:
+            raise Exception("Error updating balances:\n" + account_info["message"])
         balances = account_info["data"]
 
         frozen_balances = sorted([balance for balance in balances if balance["type"] == 4], key=self.sort_by_currency)
@@ -519,3 +521,11 @@ class CoinstoreExchange(ExchangePyBase):
     ) -> str:
         symbol_map = await self.trading_pair_symbol_map()
         return symbol_map[symbol]
+
+    async def get_volume(self, trading_pair: str) -> Decimal:
+        resp_json = await self._api_get(path_url=CONSTANTS.TICKER_BOOK_PATH_URL)
+        symbol = await self.exchange_symbol_associated_to_pair(trading_pair=trading_pair)
+        for ticker in resp_json["data"]:
+            if ticker["symbol"] == symbol.upper():
+                return Decimal(ticker["amount"])
+        return Decimal('0')

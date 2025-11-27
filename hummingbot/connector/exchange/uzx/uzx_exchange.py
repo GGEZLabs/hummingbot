@@ -534,11 +534,15 @@ class UzxExchange(ExchangePyBase):
                 )
         self._set_trading_pair_symbol_map(mapping)
 
-    async def _get_last_traded_price(self, trading_pair: str) -> float:
+    async def _get_ticker_info(self, trading_pair: str) -> Dict[str, Any]:
         resp_json = await self._api_get(
             path_url=CONSTANTS.PAIR_TICKER_PATH_URL.format(symbol=trading_pair), limit_id=CONSTANTS.PAIR_TICKER_PATH_URL
         )
-        return float(resp_json["data"]["market"]["close"])
+        return resp_json["data"]["market"]
+
+    async def _get_last_traded_price(self, trading_pair: str) -> float:
+        ticker_info = await self._get_ticker_info(trading_pair)
+        return float(ticker_info["close"])
 
     def get_exchange_trading_pair(self, trading_pair: str) -> str:
         return trading_pair.replace("-", "/")
@@ -586,3 +590,7 @@ class UzxExchange(ExchangePyBase):
         if pairs_prices["data"]:
             return pairs_prices["data"]
         return []
+
+    async def get_volume(self, trading_pair: str) -> Decimal:
+        ticker_info = await self._get_ticker_info(trading_pair)
+        return Decimal(ticker_info["vol"])

@@ -64,10 +64,7 @@ class CoinstoreRateSource(RateSourceBase):
                 if quote != quote_token:
                     continue
 
-            bid_price = ticker_data.get("bid")
-            ask_price = ticker_data.get("ask")
-            if bid_price is not None and ask_price is not None and 0 < Decimal(bid_price) <= Decimal(ask_price):
-                results[trading_pair] = (Decimal(bid_price) + Decimal(ask_price)) / Decimal("2")
+            results[trading_pair] = Decimal(ticker_data["price"])
 
         return results
 
