@@ -18,7 +18,7 @@ class VolumeMonitorConfig(BaseClientModel):
         "GGEZ1-USDT", json_schema_extra={"prompt": lambda mi: "trading pair to monitor", "prompt_on_new": True}
     )
     exchanges: List[str] = Field(
-        "p2b,coinstore,uzx",
+        ["p2b", "coinstore", "uzx"],
         json_schema_extra={
             "prompt": lambda mi: "exchanges to monitor separated by commas (e.g. p2b,coinstore,uzx)",
             "prompt_on_new": True,
