@@ -85,7 +85,7 @@ class VolumeMonitor(ScriptStrategyBase):
             await asyncio.sleep(self.config.refresh_time)
 
     def format_status(self) -> str:
-        text = super().format_status()
+        text = ""
         current_volumes = "Current Volumes: "
         current_prices = "Current Prices: "
         for exchange in self.config.exchanges:
