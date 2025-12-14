@@ -529,3 +529,53 @@ class CoinstoreExchange(ExchangePyBase):
             if ticker["symbol"] == symbol.upper():
                 return Decimal(ticker["amount"])
         return Decimal('0')
+
+    def get_exchange_trading_pair(self, trading_pair: str) -> str:
+        return trading_pair.replace("-", "")
+
+    async def track_all_open_orders(self, market: str):
+        """
+          "data": [
+        {
+            "symbol": "GGEZ1USDT",
+            "baseCurrency": "GGEZ1",
+            "quoteCurrency": "USDT",
+            "timestamp": 1749632489051,
+            "side": "SELL",
+            "timeInForce": "GTC",
+            "accountId": 20250218,
+            "ordQty": "5000",
+            "ordAmt": "0",
+            "clOrdId": "0c4d05ceb43540c0bee9a8f96ca5ca68",
+            "ordPrice": "0.092",
+            "cumAmt": "0",
+            "cumQty": "0",
+            "leavesQty": "0",
+            "ordId": "1834622635738979",
+            "ordStatus": "SUBMITTED",
+            "ordType": "LIMIT"
+        },]
+        """
+        open_orders = await self._api_get(
+            path_url=CONSTANTS.REST_ACTIVE_ORDERS,
+            params={"code": self.get_exchange_trading_pair(market)},
+            is_auth_required=True,
+        )
+        if not open_orders["data"]:
+            return
+        for order in open_orders["data"]:
+            client_order_id = order["clOrdId"]
+            if client_order_id == "":
+                client_order_id = order["ordId"]
+            in_flight_order = InFlightOrder(
+                amount=Decimal(order["ordQty"]),
+                client_order_id=str(client_order_id),
+                creation_timestamp=float(order["timestamp"]),
+                exchange_order_id=str(order["ordId"]),
+                price=Decimal(order["ordPrice"]),
+                trading_pair=market,
+                trade_type=TradeType.BUY if order["side"] == CONSTANTS.TAKER_SIDE_BUY else TradeType.SELL,
+                order_type=OrderType.LIMIT,
+                initial_state=CONSTANTS.ORDER_STATE[order["ordStatus"]],
+            )
+            self._order_tracker.start_tracking_order(in_flight_order)

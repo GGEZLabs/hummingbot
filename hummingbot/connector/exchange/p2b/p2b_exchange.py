@@ -238,22 +238,24 @@ class P2bExchange(ExchangePyBase):
         """
         Example:
             {
-            "name": "YFI_BTC",
-            "stock": "YFI",
-            "money": "BTC",
-            "precision": {
-                "money": "4",
-                "stock": "5",
-                "fee": "4"
-            },
-            "limits": {
-                "min_amount": "0.00001",
-                "max_amount": "9000",
-                "step_size": "0.00001",
-                "min_price": "0.0001",
-                "max_price": "100000",
-                "tick_size": "0.0001",
-                "min_total": "0.0001"
+            'name': 'GGEZ1_USDT',
+            'stock': 'GGEZ1',
+            'money': 'USDT',
+            'precision':
+                {
+                'money': '6',
+                'stock': '2',
+                'fee': '4'
+                },
+            'limits':
+                {
+                'min_amount': '0.1',
+                'max_amount': '0',
+                'step_size': '0.01',
+                'min_price': '0.000001',
+                'max_price': '0',
+                'tick_size': '0.000001',
+                'min_total': '1'
                 }
             }
         """
@@ -594,3 +596,43 @@ class P2bExchange(ExchangePyBase):
     async def get_volume(self, trading_pair: str) -> Decimal:
         ticker_info = await self._get_ticker_info(trading_pair)
         return Decimal(ticker_info["deal"])
+
+    async def track_all_open_orders(self, market: str):
+        """
+        {
+            "orderId": 300061888350,
+            "market": "GGEZ1_USDT",
+            "price": "0.088534",
+            "side": "buy",
+            "type": "limit",
+            "timestamp": 1764149542.235872,
+            "dealMoney": "0",
+            "dealStock": "0",
+            "amount": "80",
+            "takerFee": "0",
+            "makerFee": "0",
+            "left": "80",
+            "dealFee": "0",
+            "clientOrderId": "",
+        }
+        """
+        trading_pair = self.get_exchange_trading_pair(market)
+        open_orders = await self._get_unfilled_or_partially_filled_response(trading_pair)
+        if "result" not in open_orders or open_orders["result"] is None:
+            return
+        for order in open_orders["result"]:
+            client_order_id = order["clientOrderId"]
+            if client_order_id == "":
+                client_order_id = order["orderId"]
+            in_flight_order = InFlightOrder(
+                amount=Decimal(order["amount"]),
+                client_order_id=str(client_order_id),
+                creation_timestamp=float(order["timestamp"]),
+                exchange_order_id=str(order["orderId"]),
+                price=Decimal(order["price"]),
+                trading_pair=market,
+                trade_type=TradeType.BUY if order["side"] == "buy" else TradeType.SELL,
+                order_type=OrderType.LIMIT,
+                initial_state=CONSTANTS.ORDER_STATE["OPEN" if order["amount"] == order["left"] else "PARTIALLY_FILLED"],
+            )
+            self._order_tracker.start_tracking_order(in_flight_order)

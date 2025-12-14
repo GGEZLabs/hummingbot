@@ -4,6 +4,7 @@ HummingbotBase = declarative_base()
 
 
 def get_declarative_base():
+    from .market_config import MarketConfig  # noqa: F401
     from .market_state import MarketState  # noqa: F401
     from .metadata import Metadata  # noqa: F401
     from .order import Order  # noqa: F401

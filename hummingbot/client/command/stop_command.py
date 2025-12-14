@@ -10,22 +10,36 @@ if TYPE_CHECKING:
 
 
 class StopCommand:
-    def stop(self,  # type: HummingbotApplication
-             skip_order_cancellation: bool = False):
+    def stop(
+        self,  # type: HummingbotApplication
+        skip_order_cancellation: bool = False,
+    ):
         if threading.current_thread() != threading.main_thread():
             self.ev_loop.call_soon_threadsafe(self.stop, skip_order_cancellation)
             return
         safe_ensure_future(self.stop_loop(skip_order_cancellation), loop=self.ev_loop)
 
-    async def stop_loop(self,  # type: HummingbotApplication
-                        skip_order_cancellation: bool = False):
+    async def stop_loop(
+        self,  # type: HummingbotApplication
+        skip_order_cancellation: bool = False,
+    ):
         self.logger().info("stop command initiated.")
         self.notify("\nWinding down...")
 
         # Restore App Nap on macOS.
         if platform.system() == "Darwin":
             import appnope
+
             appnope.nap()
+
+        # this to check if there si a controller that have skip_order_cancellation
+        skip_order_cancellation = any(
+            [
+                controller.skip_order_cancellation
+                for controller in self.trading_core.strategy.controllers.values()
+                # if "skip_order_cancellation" in controller
+            ]
+        )
 
         # Handle script strategy specific cleanup first
         if self.trading_core.strategy and isinstance(self.trading_core.strategy, ScriptStrategyBase):
@@ -35,7 +49,6 @@ class StopCommand:
         if self.trading_core._strategy_running:
             await self.trading_core.stop_strategy()
 
-        # Cancel outstanding orders
         if not skip_order_cancellation:
             await self.trading_core.cancel_outstanding_orders()
 

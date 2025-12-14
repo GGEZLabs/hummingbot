@@ -594,3 +594,59 @@ class UzxExchange(ExchangePyBase):
     async def get_volume(self, trading_pair: str) -> Decimal:
         ticker_info = await self._get_ticker_info(trading_pair)
         return Decimal(ticker_info["vol"])
+
+    async def track_all_open_orders(self, market: str):
+        """
+        {
+            "product_name": "GGEZ1-USDT",
+            "order_id": "2528310953500266907",
+            "cl_ord_id": "",
+            "mgn_mode": 0,
+            "pos_side": "",
+            "order_mode": 0,
+            "pos_mode": 0,
+            "order_type": 2,
+            "pos_opt": 0,
+            "leverage": 0,
+            "order_buy_or_sell": 2,
+            "number": 0,
+            "amount": "",
+            "deal_number": 0,
+            "lock_base_amount": "509",
+            "lock_quote_amount": "44.469294",
+            "filled_quote_amount": "0",
+            "price": "0.087366",
+            "status": 0,
+            "avg_price": "0",
+            "deal_fee": "0",
+            "income": "0",
+            "created_at": 1760282395195,
+            "finish_at": 0,
+            "ins_type": "SPOT",
+            "cancel_type": 0,
+            "algo_info": null,
+            "coin": "USDT",
+            "un_filled_amount": 0
+        },
+        """
+        unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(market)
+        for order in unfilled_or_partially_filled_response:
+            client_order_id = order["cl_ord_id"]
+            if client_order_id == "":
+                client_order_id = order["order_id"]
+            in_flight_order = InFlightOrder(
+                amount=Decimal(order["lock_base_amount"]),
+                client_order_id=str(client_order_id),
+                creation_timestamp=float(order["created_at"]),
+                exchange_order_id=str(order["order_id"]),
+                price=Decimal(order["price"]),
+                trading_pair=order["product_name"],
+                trade_type=(
+                    TradeType.BUY
+                    if order["order_buy_or_sell"] == CONSTANTS.Order_Direction.buy.value
+                    else TradeType.SELL
+                ),
+                order_type=OrderType.LIMIT,
+                initial_state=(CONSTANTS.ORDER_STATE[order["status"]]),
+            )
+            self._order_tracker.start_tracking_order(in_flight_order)
