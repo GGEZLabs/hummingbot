@@ -82,7 +82,7 @@ class VolumeMonitor(ScriptStrategyBase):
             if volume < self.config.volume_threshold:
                 self.logger().notify(f"\n⚠️Warning⚠️:\nVolume is below the threshold ({volume}) on {exchange}")
 
-            await asyncio.sleep(self.config.refresh_time)
+        await asyncio.sleep(self.config.refresh_time)
 
     def format_status(self) -> str:
         text = ""
