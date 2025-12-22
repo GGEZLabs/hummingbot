@@ -384,34 +384,35 @@ class CoinstoreExchange(ExchangePyBase):
             if order.exchange_order_id is not None:
                 exchange_order_id = int(order.exchange_order_id)
                 trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=order.trading_pair)
-                all_fills_response = await self._api_get(
-                    path_url=CONSTANTS.ACCOUNT_MATCHES_TRADE,
-                    params={"symbol": trading_pair, "ordId": exchange_order_id},
+                updated_order_response = await self._api_get(
+                    path_url=CONSTANTS.ORDER_INFO_PATH_URL,
+                    params={"ordId": exchange_order_id},
                     is_auth_required=True,
                 )
-
-                for trade in all_fills_response["data"]:
-                    exchange_order_id = str(trade["orderId"])
-                    fee = TradeFeeBase.new_spot_fee(
-                        fee_schema=self.trade_fee_schema(),
-                        trade_type=order.trade_type,
-                        percent=Decimal(trade["acturalFeeRate"]),
-                        percent_token=trade["acturalFeeRate"],
-                        flat_fees=[TokenAmount(amount=Decimal(trade["fee"]), token=order.base_asset)],
-                    )
-                    price = Decimal(trade["execAmt"]) / Decimal(trade["execQty"])
-                    trade_update = TradeUpdate(
-                        trade_id=str(trade["tradeId"]),
-                        client_order_id=order.client_order_id,
-                        exchange_order_id=exchange_order_id,
-                        trading_pair=trading_pair,
-                        fee=fee,
-                        fill_base_amount=Decimal(trade["execQty"]),
-                        fill_quote_amount=Decimal(trade["execAmt"]),
-                        fill_price=price,
-                        fill_timestamp=trade["matchTime"] * 1e-3,
-                    )
-                    trade_updates.append(trade_update)
+                if updated_order_response["code"] == CONSTANTS.ORDER_NOT_EXIST_ERROR_CODE:
+                    return trade_updates
+                updated_order_data = updated_order_response["data"]
+                exchange_order_id = str(updated_order_data["ordId"])
+                fee = TradeFeeBase.new_spot_fee(
+                    fee_schema=self.trade_fee_schema(),
+                    trade_type=order.trade_type,
+                    percent=Decimal("0"),
+                    percent_token="0",
+                    flat_fees=[TokenAmount(amount=Decimal("0"), token=order.base_asset)],
+                )
+                price = Decimal(updated_order_data["avgPrice"])
+                trade_update = TradeUpdate(
+                    trade_id=str(updated_order_data["ordId"]),
+                    client_order_id=order.client_order_id,
+                    exchange_order_id=exchange_order_id,
+                    trading_pair=trading_pair,
+                    fee=fee,
+                    fill_base_amount=Decimal(updated_order_data["cumQty"]),
+                    fill_quote_amount=Decimal(updated_order_data["cumAmt"]),
+                    fill_price=price,
+                    fill_timestamp=updated_order_data["orderUpdateTime"] * 1e-3,
+                )
+                trade_updates.append(trade_update)
         except Exception as e:
             print(e)
         return trade_updates
@@ -528,7 +529,7 @@ class CoinstoreExchange(ExchangePyBase):
         for ticker in resp_json["data"]:
             if ticker["symbol"] == symbol.upper():
                 return Decimal(ticker["amount"])
-        return Decimal('0')
+        return Decimal("0")
 
     def get_exchange_trading_pair(self, trading_pair: str) -> str:
         return trading_pair.replace("-", "")
