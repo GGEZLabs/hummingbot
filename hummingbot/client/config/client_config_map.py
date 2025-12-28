@@ -334,12 +334,16 @@ class DBOtherMode(DBMode):
         json_schema_extra={"prompt": lambda cm: "Please enter your DB name"},
     )
     db_schema: str = Field(
-        default="db_schema",
+        default="public",
         json_schema_extra={"prompt": lambda cm: "Please enter the name of your DB schema"},
     )
     model_config = ConfigDict(title="other_db_engine")
 
     def get_url(self, db_path: str) -> str:
+        if self.db_schema == "public":
+            return (
+                f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+            )
         return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3D{self.db_schema}"
 
     @field_validator("db_engine")
