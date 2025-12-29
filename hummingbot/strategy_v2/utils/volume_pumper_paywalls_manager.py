@@ -127,8 +127,11 @@ class VolumePumperPaywallsManager:
                     if self.utils.compare_numbers(
                         order_candidate.price, "==", current_order.price
                     ) and self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
-                        action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
-                        action_plan_copy.creations_candidates.remove(order_candidate)
+                        if current_order.client_order_id in action_plan_copy.cancellations_ids:
+                            action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
+
+                        if order_candidate in action_plan_copy.creations_candidates:
+                            action_plan_copy.creations_candidates.remove(order_candidate)
 
             return action_plan_copy
         except Exception as e:
