@@ -118,18 +118,22 @@ class VolumePumperPaywallsManager:
             if so i should remove them from the action plan (the cancellation id and the order candidate )
             and return True
         """
-        action_plan_copy = copy(orders_action_plan)
-        current_orders = self.connector.in_flight_orders
-        for order_candidate in action_plan_copy.creations_candidates:
-            for current_order in current_orders.values():
-                # check if the order is similar to the order in the action plan
-                if self.utils.compare_numbers(
-                    order_candidate.price, "==", current_order.price
-                ) and self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
-                    action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
-                    action_plan_copy.creations_candidates.remove(order_candidate)
+        try:
+            action_plan_copy = copy(orders_action_plan)
+            current_orders = self.connector.in_flight_orders
+            for order_candidate in action_plan_copy.creations_candidates:
+                for current_order in current_orders.values():
+                    # check if the order is similar to the order in the action plan
+                    if self.utils.compare_numbers(
+                        order_candidate.price, "==", current_order.price
+                    ) and self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
+                        action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
+                        action_plan_copy.creations_candidates.remove(order_candidate)
 
-        return action_plan_copy
+            return action_plan_copy
+        except Exception as e:
+            self.logger().error(f"Error removing already existing orders: {str(e)}")
+            return orders_action_plan
 
     def _check_if_action_plan_needs_adjustment(self, orders_action_plan: OrderActionPlan):
         bids, asks = self._conflicting_orders(orders_action_plan.creations_candidates)
