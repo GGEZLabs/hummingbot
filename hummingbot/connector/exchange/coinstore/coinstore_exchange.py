@@ -565,9 +565,15 @@ class CoinstoreExchange(ExchangePyBase):
         if not open_orders["data"]:
             return
         for order in open_orders["data"]:
+            if any([str(ifo.exchange_order_id) == str(order["ordId"]) for ifo in self.in_flight_orders.values()]):
+                self.logger().info("Skipping order", order["ordId"])
+                continue
+            self.logger().info("Tracking order", order["ordId"])
+
             client_order_id = order["clOrdId"]
             if client_order_id == "":
                 client_order_id = order["ordId"]
+
             in_flight_order = InFlightOrder(
                 amount=Decimal(order["ordQty"]),
                 client_order_id=str(client_order_id),

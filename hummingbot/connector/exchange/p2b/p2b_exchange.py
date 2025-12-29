@@ -621,6 +621,9 @@ class P2bExchange(ExchangePyBase):
         if "result" not in open_orders or open_orders["result"] is None:
             return
         for order in open_orders["result"]:
+            if any([str(ifo.exchange_order_id) == str(order["orderId"]) for ifo in self.in_flight_orders.values()]):
+                self.logger().info("Skipping order", order["orderId"])
+                continue
             client_order_id = order["clientOrderId"]
             if client_order_id == "":
                 client_order_id = order["orderId"]

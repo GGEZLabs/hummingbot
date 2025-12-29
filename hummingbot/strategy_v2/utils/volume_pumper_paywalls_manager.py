@@ -1,3 +1,4 @@
+from copy import copy
 from decimal import Decimal
 from typing import Dict, List
 
@@ -94,7 +95,9 @@ class VolumePumperPaywallsManager:
         orders_action_plan = OrderActionPlan()
         orders_action_plan.cancellations_ids = await self._get_cancel_orders_id()
         orders_action_plan.creations_candidates = self.generate_orders_candidates()
-        # check if the suggested new order book need adjusting
+        # check if similar orders are already in the order book
+        orders_action_plan = self.remove_already_existing_orders(orders_action_plan)
+        # check if the suggested new order book is exposed to balance loss
         # if there is an order that could effect the paywalls
         # if so , notify the user and keep everything as it is
         if self._check_if_action_plan_needs_adjustment(orders_action_plan):
@@ -105,8 +108,32 @@ class VolumePumperPaywallsManager:
         self.orders_action_plan = orders_action_plan
         self.is_task_running = False
 
+    def remove_already_existing_orders(self, orders_action_plan: OrderActionPlan):
+        """
+        check if similar orders are already placed and active in the order book
+        if so i should remove them from the action plan
+            (remove from creation candidates and from the cancellations ids)
+            to archive this i need to check my current active orders (in flight orders)
+            and check if any of them are similar to the orders in the action plan
+            if so i should remove them from the action plan (the cancellation id and the order candidate )
+            and return True
+        """
+        action_plan_copy = copy(orders_action_plan)
+        current_orders = self.connector.in_flight_orders
+        for order_candidate in action_plan_copy.creations_candidates:
+            for current_order in current_orders.values():
+                # check if the order is similar to the order in the action plan
+                if self.utils.compare_numbers(
+                    order_candidate.price, "==", current_order.price
+                ) and self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
+                    action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
+                    action_plan_copy.creations_candidates.remove(order_candidate)
+
+        return action_plan_copy
+
     def _check_if_action_plan_needs_adjustment(self, orders_action_plan: OrderActionPlan):
         bids, asks = self._conflicting_orders(orders_action_plan.creations_candidates)
+
         if len(bids) != 0 or len(asks) != 0:
             self.to_be_handled_orders = [
                 self.utils.generate_order_candidate(order.price, order.amount, True) for order in bids.itertuples()
@@ -122,8 +149,8 @@ class VolumePumperPaywallsManager:
         # i should see the order book with out my orders
         # and check if there
         order_book = self.connector.get_order_book(self.trading_pair).snapshot
-        bids = order_book[0]
-        asks = order_book[1]
+        bids = copy(order_book[0])
+        asks = copy(order_book[1])
         current_orders = self.connector.in_flight_orders
         if not current_orders:
             return False
@@ -136,27 +163,28 @@ class VolumePumperPaywallsManager:
                 continue
             for my_bid in my_bids:
                 if self.utils.compare_numbers(bid.price, "==", my_bid.price):
-                    if self.utils.compare_numbers(bid.amount, "==", my_bid.amount):
+                    if self.utils.compare_numbers(bid.amount, "==", my_bid.amount) or self.utils.compare_numbers(
+                        bid.amount, "==", "0"
+                    ):
                         bids.drop(i, inplace=True)
                         break
-                    else:
+                    elif self.utils.compare_numbers(bid.amount, ">", my_bid.amount):
                         bids.loc[i, ["amount"]] = [float(bid.amount) - float(my_bid.amount)]
-                        break
 
         for i, ask in enumerate(asks.itertuples()):
             if self.utils.compare_numbers(ask.price, ">=", self.market_config_json.flexible_resistance):
                 asks.drop(i, inplace=True)
                 continue
             # check if the ask is not mine
-            for my_ask in my_asks:
+            for j, my_ask in enumerate(my_asks):
                 if self.utils.compare_numbers(ask.price, "==", my_ask.price):
-                    if self.utils.compare_numbers(ask.amount, "==", my_ask.amount):
+                    if self.utils.compare_numbers(ask.amount, "==", my_ask.amount) or self.utils.compare_numbers(
+                        ask.amount, "==", "0"
+                    ):
                         asks.drop(i, inplace=True)
                         break
-                    else:
-                        # if same price but different amount
+                    elif self.utils.compare_numbers(ask.amount, ">", my_ask.amount):
                         asks.loc[i, ["amount"]] = [float(ask.amount) - float(my_ask.amount)]
-                        break
 
         return bids, asks
 

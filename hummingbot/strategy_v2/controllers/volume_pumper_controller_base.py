@@ -389,7 +389,7 @@ class VolumePumperControllerBase(ControllerBase):
                 f"\n⚠️ Warning ⚠️: Architect Paused\nExchange:{self.exchange}\nOrders Interfering with Architect:"
             )
             for order in self.paywalls_manager.to_be_handled_orders:
-                notification += f"\na {order.order_side} Order at {self.utils.round_price_to_tick_size(order.price)} with amount: {self.utils.round_amount_to_tick_size(order.amount)}"
+                notification += f"\na {order.order_side.name} Order at {self.utils.round_price_to_tick_size(order.price)} with amount: {self.utils.round_amount_to_tick_size(order.amount)}"
             self.logger().notify(notification)
             self.start_architect_delay()
             return []

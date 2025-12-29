@@ -631,6 +631,9 @@ class UzxExchange(ExchangePyBase):
         """
         unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(market)
         for order in unfilled_or_partially_filled_response:
+            if any([str(ifo.exchange_order_id) == str(order["order_id"]) for ifo in self.in_flight_orders.values()]):
+                self.logger().info("Skipping order", order["order_id"])
+                continue
             client_order_id = order["cl_ord_id"]
             if client_order_id == "":
                 client_order_id = order["order_id"]
