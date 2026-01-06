@@ -3,16 +3,6 @@ from typing import Any, Dict
 
 import grpc
 from bip_utils import Bip39SeedGenerator, Bip44, Bip44Changes, Bip44Coins
-from cosmospy_protobuf.cosmos.auth.v1beta1 import auth_pb2, query_pb2 as auth_query, query_pb2_grpc as auth_grpc
-from cosmospy_protobuf.cosmos.bank.v1beta1 import (
-    query_pb2 as bank_query,
-    query_pb2_grpc as bank_grpc,
-    tx_pb2 as bank_tx,
-)
-from cosmospy_protobuf.cosmos.base.v1beta1 import coin_pb2
-from cosmospy_protobuf.cosmos.crypto.secp256k1 import keys_pb2 as secp_keys
-from cosmospy_protobuf.cosmos.tx.signing.v1beta1 import signing_pb2
-from cosmospy_protobuf.cosmos.tx.v1beta1 import service_pb2, service_pb2_grpc, tx_pb2
 
 # Cryptography & Keys
 from ecdsa import SECP256k1, SigningKey
@@ -20,6 +10,16 @@ from ecdsa.util import sigencode_string
 
 # Protobuf Imports (cosmospy-protobuf)
 from google.protobuf.any_pb2 import Any as ProtoAny
+from pyinjective.proto.cosmos.auth.v1beta1 import auth_pb2, query_pb2 as auth_query, query_pb2_grpc as auth_grpc
+from pyinjective.proto.cosmos.bank.v1beta1 import (
+    query_pb2 as bank_query,
+    query_pb2_grpc as bank_grpc,
+    tx_pb2 as bank_tx,
+)
+from pyinjective.proto.cosmos.base.v1beta1 import coin_pb2
+from pyinjective.proto.cosmos.crypto.secp256k1 import keys_pb2 as secp_keys
+from pyinjective.proto.cosmos.tx.signing.v1beta1 import signing_pb2
+from pyinjective.proto.cosmos.tx.v1beta1 import service_pb2, service_pb2_grpc, tx_pb2
 
 from hummingbot.strategy_v2.utils.Icosmos_grpc_client import IChainClient
 
