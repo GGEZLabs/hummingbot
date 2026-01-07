@@ -176,16 +176,17 @@ class RandomTransaction(ScriptStrategyBase):
             self.logger().error(f"Error while processing transaction for {sender_address}: {e}")
 
     def format_status(self) -> str:
+        denom = self.config.denom[1:]
         tsx_info = (
             f"\nStrategy Config :"
-            f"\nTransaction Amount Range: {self.config.min_tx_amount} - {self.config.max_tx_amount} {self.config.denom}"
+            f"\nTransaction Amount Range: {self.convert_from_micro_denom_to_denom(self.config.min_tx_amount)} - {self.convert_from_micro_denom_to_denom(self.config.max_tx_amount)} {denom}"
             f"\nDelay Order Time: {self.config.min_delay} seconds + Random Delay: 0 - {self.config.max_delay} seconds"
             f"\nNumber of Accounts: {len(self.accounts)}"
             "\n"
             "\nTotal Cumulating Transactions:"
             f"\nTotal Transactions: {self.cumulating_transactions.total_transactions}"
-            f"\nTotal Amount: {self.cumulating_transactions.total_amount} {self.config.denom}"
-            f"\nAverage Amount: {self.cumulating_transactions.total_amount / self.cumulating_transactions.total_transactions} {self.config.denom}"
+            f"\nTotal Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount)} {denom}"
+            f"\nAverage Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount / self.cumulating_transactions.total_transactions)} {denom}"
             "\n"
             "\nCumulating Transactions by Account:"
         )
@@ -195,14 +196,17 @@ class RandomTransaction(ScriptStrategyBase):
             cumulating_transactions = self.cumulating_transactions.get_account_transactions(account["address"])
             if cumulating_transactions["count"] == 0:
                 tsx_info += "\nTotal Transactions: 0"
-                tsx_info += f"\nTotal Amount: 0 {self.config.denom}"
-                tsx_info += f"\nAverage Amount: 0 {self.config.denom}"
+                tsx_info += f"\nTotal Amount: 0 {denom}"
+                tsx_info += f"\nAverage Amount: 0 {denom}"
             else:
                 tsx_info += f"\nTotal Transactions: {cumulating_transactions['count']}"
-                tsx_info += f"\nTotal Amount: {cumulating_transactions['total']} {self.config.denom}"
-                tsx_info += f"\nAverage Amount: {cumulating_transactions['total'] / cumulating_transactions['count']} {self.config.denom}"
+                tsx_info += f"\nTotal Amount: {self.convert_from_micro_denom_to_denom(cumulating_transactions['total'])} {denom}"
+                tsx_info += f"\nAverage Amount: {self.convert_from_micro_denom_to_denom(cumulating_transactions['total'] / cumulating_transactions['count'])} {denom}"
 
         return tsx_info
+
+    def convert_from_micro_denom_to_denom(self, amount: float):
+        return amount / 1_000_000
 
     class cumulating_transactions:
         def __init__(self):
