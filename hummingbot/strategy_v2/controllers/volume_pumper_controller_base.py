@@ -56,6 +56,8 @@ class VolumePumperControllerBase(ControllerBase):
         self.last_mid_price_timestamp = time.time()
         self.random_delay = 0
         self.next_architect_update_timestamp = 0
+        self.last_architect_actions = 0
+
         # rate sources
         self.market_data_provider.initialize_rate_sources(
             [ConnectorPair(connector_name=config.exchange, trading_pair=config.trading_pair)]
@@ -76,7 +78,7 @@ class VolumePumperControllerBase(ControllerBase):
         return int(time.time())
 
     @property
-    def is_ready_to_create_periodic_summary(self):
+    def ready_to_create_periodic_summary(self):
         return (
             self.periodic_report_interval > 0
             and self.current_timestamp - self.report_management.last_report_timestamp
@@ -84,7 +86,7 @@ class VolumePumperControllerBase(ControllerBase):
         )
 
     @property
-    def is_ready_to_create_order(self):
+    def ready_to_create_volume_orders(self):
         return self.current_timestamp - self.last_mid_price_timestamp >= self.delay_order_time + self.random_delay
 
     @property
@@ -92,6 +94,30 @@ class VolumePumperControllerBase(ControllerBase):
         if self.next_architect_update_timestamp > self.current_timestamp:
             return True
         return False
+
+    @property
+    def ready_to_create_architect_orders(self):
+        if self.paywalls_manager.is_task_running:
+            return False
+
+        if self.is_architect_on_cooldown:
+            return False
+
+        if time.time() - self.last_architect_actions < 20:
+            return False
+
+        return True
+
+    @property
+    def strategy_validations(self):
+        # if the strategy status is running
+        if not self.is_strategy_ready():
+            return False
+        # risk management check if the balance has changed
+        if self.is_balance_changed():
+            return False
+
+        return True
 
     async def update_processed_data(self):
         pass
@@ -347,43 +373,22 @@ class VolumePumperControllerBase(ControllerBase):
         # cancel active orders
         # self.cancel_all_orders()
         """
-        if not self.strategy_validations():
+        if not self.strategy_validations:
             return []
 
-        if self.is_ready_to_create_periodic_summary:
+        if self.ready_to_create_periodic_summary:
             self.create_periodic_summary()
-        architect_actions = self.generate_architect_actions()
-        if architect_actions:
-            return architect_actions
 
-        return self.generate_volume_actions()
-
-    def strategy_validations(self):
-        # if the strategy status is running
-        if not self.is_strategy_ready():
-            return False
-
-        # generate periodic summary report if needed
-        if self.paywalls_manager.is_task_running:
-            return False
-
-        # check if last mid price timestamp is less than delay order time (time interval between orders)
-        if not self.is_ready_to_create_order:
-            return False
-
-        # risk management check if the balance has changed
-        if self.is_balance_changed():
-            return False
-
-        if self.paywalls_manager.is_task_running:
-            return False
-
-        return True
+        if self.ready_to_create_architect_orders:
+            architect_actions = self.generate_architect_actions()
+            if architect_actions:
+                self.last_architect_actions = time.time()
+                return architect_actions
+        if self.ready_to_create_volume_orders:
+            return self.generate_volume_actions()
+        return []
 
     def generate_architect_actions(self) -> List[ExecutorAction]:
-        if self.is_architect_on_cooldown:
-            return []
-
         if self.paywalls_manager.to_be_handled_orders and self.strategy_status != StrategyStatus.ARCHITECT_ON_COOLDOWN:
             notification = (
                 f"\n⚠️ Warning ⚠️: Architect Paused\nExchange:{self.exchange}\nOrders Interfering with Architect:"
@@ -394,7 +399,7 @@ class VolumePumperControllerBase(ControllerBase):
             self.start_architect_delay()
             return []
 
-        # cooldown is over so we need to recheck if there is a new order to be handled
+        # if cooldown is over so we need to recheck if there is a new order to be handled
         if self.strategy_status == StrategyStatus.ARCHITECT_ON_COOLDOWN:
             self.strategy_status = StrategyStatus.RUNNING
             self.paywalls_manager.to_be_handled_orders = []
@@ -405,6 +410,7 @@ class VolumePumperControllerBase(ControllerBase):
             action_plan = self.paywalls_manager.orders_action_plan
             self.paywalls_manager.orders_action_plan = None
             executor_actions: List[ExecutorAction] = self.generate_paywalls_executor_actions(action_plan)
+
             return executor_actions
 
         if self.paywalls_architect.is_time_to_make_decision():
@@ -506,11 +512,12 @@ class VolumePumperControllerBase(ControllerBase):
             if order_id in executors_by_order_id:
                 executor_id = executors_by_order_id[order_id].id
                 actions.append(
-                    StopExecutorAction(executor_id=executor_id, controller_id=self.config.id, keep_position=True)
+                    StopExecutorAction(executor_id=executor_id, controller_id=self.config.id, keep_position=False)
                 )
             else:
                 # This order doesn't have an executor, so we cancel it directly.
                 self.connector.cancel(self.trading_pair, order_id)
+                # self.connector._order_tracker.stop_tracking_order(order_id)
 
         # Handle creations using a list comprehension for conciseness
         create_actions = [

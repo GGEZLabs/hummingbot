@@ -206,7 +206,7 @@ class RandomTransaction(ScriptStrategyBase):
         return tsx_info
 
     def convert_from_micro_denom_to_denom(self, amount: float):
-        return amount / 1_000_000
+        return round(amount / 1_000_000, 6)
 
     class cumulating_transactions:
         def __init__(self):

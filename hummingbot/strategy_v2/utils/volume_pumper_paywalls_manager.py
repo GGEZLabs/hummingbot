@@ -1,6 +1,7 @@
-from copy import copy
+from collections import defaultdict
+from copy import deepcopy
 from decimal import Decimal
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 from cachetools import TTLCache, cachedmethod
@@ -96,16 +97,16 @@ class VolumePumperPaywallsManager:
         orders_action_plan.cancellations_ids = await self._get_cancel_orders_id()
         orders_action_plan.creations_candidates = self.generate_orders_candidates()
         # check if similar orders are already in the order book
-        orders_action_plan = self.remove_already_existing_orders(orders_action_plan)
+        updated_orders_action_plan = self.remove_already_existing_orders(orders_action_plan)
         # check if the suggested new order book is exposed to balance loss
         # if there is an order that could effect the paywalls
         # if so , notify the user and keep everything as it is
-        if self._check_if_action_plan_needs_adjustment(orders_action_plan):
+        if self._check_if_action_plan_needs_adjustment(updated_orders_action_plan):
             self.orders_action_plan = None
             self.is_task_running = False
             return
 
-        self.orders_action_plan = orders_action_plan
+        self.orders_action_plan = updated_orders_action_plan
         self.is_task_running = False
 
     def remove_already_existing_orders(self, orders_action_plan: OrderActionPlan):
@@ -119,23 +120,23 @@ class VolumePumperPaywallsManager:
             and return True
         """
         try:
-            action_plan_copy = copy(orders_action_plan)
             current_orders = self.connector.in_flight_orders
-            for order_candidate in action_plan_copy.creations_candidates:
-                for current_order in current_orders.values():
-                    # check if the order is similar to the order in the action plan
-                    if self.utils.compare_numbers(
-                        order_candidate.price, "==", current_order.price
-                    ) and self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
-                        if current_order.client_order_id in action_plan_copy.cancellations_ids:
-                            action_plan_copy.cancellations_ids.remove(current_order.client_order_id)
+            orders_by_price_map = defaultdict(list)
+            for order in current_orders.values():
+                orders_by_price_map[str(order.price)].append(order)
 
-                        if order_candidate in action_plan_copy.creations_candidates:
-                            action_plan_copy.creations_candidates.remove(order_candidate)
+            for order_candidate in deepcopy(orders_action_plan.creations_candidates):
+                for current_order in orders_by_price_map[str(order_candidate.price)]:
+                    if self.utils.compare_numbers(order_candidate.amount, "==", current_order.amount):
+                        if current_order.client_order_id in orders_action_plan.cancellations_ids:
+                            orders_action_plan.cancellations_ids.remove(current_order.client_order_id)
+                        if order_candidate in orders_action_plan.creations_candidates:
+                            orders_action_plan.creations_candidates.remove(order_candidate)
+                        break
 
-            return action_plan_copy
+            return orders_action_plan
         except Exception as e:
-            self.logger().error(f"Error removing already existing orders: {str(e)}")
+            self.connector.logger().error(f"Error removing already existing orders: {str(e)}")
             return orders_action_plan
 
     def _check_if_action_plan_needs_adjustment(self, orders_action_plan: OrderActionPlan):
@@ -148,7 +149,9 @@ class VolumePumperPaywallsManager:
             return True
         return False
 
-    def _conflicting_orders(self, order_candidates: List[OrderCandidate]):
+    def _conflicting_orders(
+        self, order_candidates: List[OrderCandidate]
+    ) -> Tuple[List[OrderCandidate], List[OrderCandidate]]:
         """
         Check if there is any order ( not mine ) could result with balance loss
         if the suggested new order book is applied
@@ -156,42 +159,53 @@ class VolumePumperPaywallsManager:
         # i should see the order book with out my orders
         # and check if there
         order_book = self.connector.get_order_book(self.trading_pair).snapshot
-        bids = copy(order_book[0])
-        asks = copy(order_book[1])
+        bids = deepcopy(order_book[0])
+        asks = deepcopy(order_book[1])
         current_orders = self.connector.in_flight_orders
         if not current_orders:
-            return False
+            return [], []
+
         my_bids, my_asks = self.organize_orders(current_orders)
-
-        for i, bid in enumerate(bids.itertuples()):
-            # check if the bid is not mine
-            if self.utils.compare_numbers(bid.price, "<=", self.market_config_json.flexible_support):
-                bids.drop(i, inplace=True)
+        for idx in list(bids.index):
+            price = bids.at[idx, "price"]
+            # skip irrelevant prices
+            if self.utils.compare_numbers(price, "<=", self.market_config_json.flexible_support):
+                bids.drop(idx, inplace=True)
                 continue
+
+            # For each of my bids at same price, reduce the live amount (reading/writing the DF)
             for my_bid in my_bids:
-                if self.utils.compare_numbers(bid.price, "==", my_bid.price):
-                    if self.utils.compare_numbers(bid.amount, "==", my_bid.amount) or self.utils.compare_numbers(
-                        bid.amount, "==", "0"
-                    ):
-                        bids.drop(i, inplace=True)
-                        break
-                    elif self.utils.compare_numbers(bid.amount, ">", my_bid.amount):
-                        bids.loc[i, ["amount"]] = [float(bid.amount) - float(my_bid.amount)]
+                if self.utils.compare_numbers(price, "==", my_bid.price):
+                    live_amount = float(bids.at[idx, "amount"])
+                    my_amount = float(my_bid.amount)
 
-        for i, ask in enumerate(asks.itertuples()):
-            if self.utils.compare_numbers(ask.price, ">=", self.market_config_json.flexible_resistance):
-                asks.drop(i, inplace=True)
+                    # fully matched or zero
+                    if self.utils.compare_numbers(live_amount, "==", my_bid.amount) or self.utils.compare_numbers(live_amount, "==", "0"):
+                        bids.drop(idx, inplace=True)
+                        break  # stop processing this order-book row
+                    elif self.utils.compare_numbers(live_amount, ">", my_bid.amount):
+                        new_amount = live_amount - my_amount
+                        # write updated amount back to dataframe (this is read on next inner iteration)
+                        bids.at[idx, "amount"] = new_amount
+                        # continue looping in case another of my orders has the same price
+
+        # ASKS
+        for idx in list(asks.index):
+            price = asks.at[idx, "price"]
+            if self.utils.compare_numbers(price, ">=", self.market_config_json.flexible_resistance):
+                asks.drop(idx, inplace=True)
                 continue
-            # check if the ask is not mine
-            for j, my_ask in enumerate(my_asks):
-                if self.utils.compare_numbers(ask.price, "==", my_ask.price):
-                    if self.utils.compare_numbers(ask.amount, "==", my_ask.amount) or self.utils.compare_numbers(
-                        ask.amount, "==", "0"
-                    ):
-                        asks.drop(i, inplace=True)
+
+            for my_ask in my_asks:
+                if self.utils.compare_numbers(price, "==", my_ask.price):
+                    live_amount = float(asks.at[idx, "amount"])
+                    my_amount = float(my_ask.amount)
+
+                    if self.utils.compare_numbers(live_amount, "==", my_ask.amount) or self.utils.compare_numbers(live_amount, "==", "0"):
+                        asks.drop(idx, inplace=True)
                         break
-                    elif self.utils.compare_numbers(ask.amount, ">", my_ask.amount):
-                        asks.loc[i, ["amount"]] = [float(ask.amount) - float(my_ask.amount)]
+                    elif self.utils.compare_numbers(live_amount, ">", my_ask.amount):
+                        asks.at[idx, "amount"] = live_amount - my_amount
 
         return bids, asks
 

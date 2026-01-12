@@ -107,13 +107,13 @@ class OrderExecutor(ExecutorBase):
             if self._order.order.price - current_price > (current_price * threshold):
                 self.renew_order()
 
-    def early_stop(self, keep_position: bool = False):
+    def early_stop(self, keep_position: bool = True):
         """
         This method allows strategy to stop the executor early.
 
         :return: None
         """
-        if self.config.is_paywall_order and not keep_position:
+        if self.config.is_paywall_order and keep_position:
             self.close_type = CloseType.POSITION_HOLD
         self._status = RunnableStatus.SHUTTING_DOWN
 

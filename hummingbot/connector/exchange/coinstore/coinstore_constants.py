@@ -26,7 +26,6 @@ REST_ACTIVE_ORDERS = "/trade/order/active"
 ACCOUNT_MATCHES_TRADE = "/trade/match/accountMatches"
 REST_ORDER_INFO = "/v2/trade/order/orderInfo"
 
-
 TICKER_PRICE_PATH_URL = "/v1/ticker/price"
 TICKER_BOOK_PATH_URL = "/v1/market/tickers"  # ticker book latest traded price
 MY_TRADES_PATH_URL = "/trade/match/accountMatches"
@@ -62,6 +61,8 @@ SAME_USER_REQUESTS_ID = "SAME_USER_REQUESTS"
 SAME_IP_REQUEST_LIMIT = 6
 SAME_USER_REQUEST_LIMIT = 4
 
+# cache time
+OPEN_ORDERS_CACHE_TIME = 10
 WS_SUBSCRIBE = "WSSubscribe"
 WS_HEARTBEAT_TIME_INTERVAL = 30
 

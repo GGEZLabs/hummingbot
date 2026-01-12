@@ -54,6 +54,7 @@ class CoinstoreExchange(ExchangePyBase):
         self._trading_required = trading_required
         self._trading_pairs = trading_pairs
         self._last_trades_poll_coinstore_timestamp = 1.0
+        self._unfilled_or_partially_filled_responses_cache = {}
         super().__init__(client_config_map)
 
     @staticmethod
@@ -417,13 +418,30 @@ class CoinstoreExchange(ExchangePyBase):
             print(e)
         return trade_updates
 
-    async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
-        updated_order_data = await self._api_get(
-            path_url=CONSTANTS.ORDER_INFO_PATH_URL,
-            params={"ordId": tracked_order.exchange_order_id},
+    async def _get_unfilled_or_partially_filled_response(self, market: str):
+        if self._unfilled_or_partially_filled_responses_cache.get(market) is not None:
+            if (
+                self._unfilled_or_partially_filled_responses_cache[market]["timestamp"]
+                > self.current_timestamp - CONSTANTS.OPEN_ORDERS_CACHE_TIME
+            ):
+                return self._unfilled_or_partially_filled_responses_cache[market]["response"]
+        unfilled_or_partially_filled_response = await self._api_get(
+            path_url=CONSTANTS.REST_ACTIVE_ORDERS,
+            params={"code": market},
             is_auth_required=True,
         )
-        if updated_order_data["code"] == CONSTANTS.ORDER_NOT_EXIST_ERROR_CODE:
+        self._unfilled_or_partially_filled_responses_cache[market] = {
+            "response": unfilled_or_partially_filled_response,
+            "timestamp": self.current_timestamp,
+        }
+        return unfilled_or_partially_filled_response
+
+    async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
+        open_orders = await self._get_unfilled_or_partially_filled_response(
+            market=self.get_exchange_trading_pair(tracked_order.trading_pair),
+
+        )
+        if not open_orders["data"]:
             return OrderUpdate(
                 exchange_order_id=tracked_order.exchange_order_id,
                 new_state=CONSTANTS.ORDER_STATE["CANCELED"],
@@ -431,18 +449,27 @@ class CoinstoreExchange(ExchangePyBase):
                 client_order_id=tracked_order.client_order_id,
                 update_timestamp=self.current_timestamp,
             )
+        order_update = None
+        for order in open_orders["data"]:
+            if order["ordId"] == tracked_order.exchange_order_id:
+                new_state = CONSTANTS.ORDER_STATE[order["ordStatus"]]
 
-        order_data = updated_order_data["data"]
-        new_state = CONSTANTS.ORDER_STATE[order_data["ordStatus"]]
-
-        order_update = OrderUpdate(
-            client_order_id=tracked_order.client_order_id,
-            exchange_order_id=str(order_data["ordId"]),
-            trading_pair=tracked_order.trading_pair,
-            update_timestamp=order_data["orderUpdateTime"] * 1e-3,
-            new_state=new_state,
-        )
-
+                order_update = OrderUpdate(
+                    client_order_id=tracked_order.client_order_id,
+                    exchange_order_id=str(order["ordId"]),
+                    trading_pair=tracked_order.trading_pair,
+                    update_timestamp=order["timestamp"] * 1e-3,
+                    new_state=new_state,
+                )
+                break
+        if order_update is None:
+            return OrderUpdate(
+                exchange_order_id=tracked_order.exchange_order_id,
+                new_state=CONSTANTS.ORDER_STATE["CANCELED"],
+                trading_pair=tracked_order.trading_pair,
+                client_order_id=tracked_order.client_order_id,
+                update_timestamp=self.current_timestamp,
+            )
         return order_update
 
     def sort_by_currency(self, x):
@@ -557,10 +584,8 @@ class CoinstoreExchange(ExchangePyBase):
             "ordType": "LIMIT"
         },]
         """
-        open_orders = await self._api_get(
-            path_url=CONSTANTS.REST_ACTIVE_ORDERS,
-            params={"code": self.get_exchange_trading_pair(market)},
-            is_auth_required=True,
+        open_orders = await self._get_unfilled_or_partially_filled_response(
+            market=self.get_exchange_trading_pair(market),
         )
         if not open_orders["data"]:
             return
