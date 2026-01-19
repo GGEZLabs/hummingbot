@@ -352,6 +352,9 @@ class TradingCore:
                 # Load config from provided config dict or file
                 config_data = self._load_strategy_config()
                 config = config_class(**config_data)
+                # Decrypt any encrypted SecretStr fields (uses master password from login)
+                config_adapter = ClientConfigAdapter(config)
+                config_adapter.decrypt_all_secure_data()
                 script_class.init_markets(config)
             except StopIteration:
                 raise InvalidScriptModule(f"The module {script_name} does not contain any subclass of BaseClientModel")
