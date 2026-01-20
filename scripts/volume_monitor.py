@@ -77,16 +77,17 @@ class VolumeMonitor(ScriptStrategyBase):
             self._task = safe_ensure_future(self.check_volume())
 
     async def check_volume(self):
-        try:
-            for exchange in self.config.exchanges:
+        for exchange in self.config.exchanges:
+            try:
                 volume = await self.connectors[exchange].get_volume(self.config.trading_pair)
                 last_volume = self.last_volumes.get(exchange)
                 self.last_volumes[exchange] = volume
                 if volume < self.config.volume_threshold:
                     if last_volume is None or volume <= last_volume:
                         self.logger().notify(f"\n⚠️Warning⚠️:\nVolume is below the threshold ({volume}) on {exchange}")
-        except Exception as e:
-            self.logger().error(f"Error checking volume: {e}")
+            except Exception as e:
+                self.logger().error(f"Error checking volume for {exchange}: {e}")
+
         await asyncio.sleep(self.config.refresh_time)
 
     def format_status(self) -> str:
