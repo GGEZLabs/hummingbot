@@ -49,6 +49,8 @@ TAKER_SIDE_BUY = "buy"
 IP_LIMITING_RULE = "IP_LIMITING_RULE"
 USER_LIMITING_RULE = "USER_LIMITING_RULE"
 ONE_SECOND = 1
+request_limit = 10
+orders_request_limit = 3
 
 # Websocket event types
 SUBSCRIBE_METHOD = "sub"
@@ -59,13 +61,13 @@ SUBSCRIBE_TYPE = "spot"
 
 RATE_LIMITS = [
     # Pools
-    RateLimit(limit_id=IP_LIMITING_RULE, limit=10, time_interval=ONE_SECOND),
-    RateLimit(limit_id=USER_LIMITING_RULE, limit=10, time_interval=ONE_SECOND),
+    RateLimit(limit_id=IP_LIMITING_RULE, limit=request_limit, time_interval=ONE_SECOND),
+    RateLimit(limit_id=USER_LIMITING_RULE, limit=request_limit, time_interval=ONE_SECOND),
     # Weighted Limits
     # Public API endpoints
     RateLimit(
         limit_id=SERVER_TIME_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -73,7 +75,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=PAIR_TICKER_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -81,7 +83,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=MARKETS_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -89,7 +91,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=TICKERS_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -97,7 +99,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=DEPTH_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -106,7 +108,7 @@ RATE_LIMITS = [
     # Private API endpoints
     RateLimit(
         limit_id=BALANCES_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -115,7 +117,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=CREATE_NEW_ORDER_PATH_URL,
-        limit=3,
+        limit=orders_request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -124,7 +126,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=CANCEL_ORDER_PATH_URL,
-        limit=3,
+        limit=orders_request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -133,7 +135,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=FILLED_ORDERS_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),
@@ -142,7 +144,7 @@ RATE_LIMITS = [
     ),
     RateLimit(
         limit_id=CURRENT_ORDERS_PATH_URL,
-        limit=10,
+        limit=request_limit,
         time_interval=ONE_SECOND,
         linked_limits=[
             LinkedLimitWeightPair(IP_LIMITING_RULE),

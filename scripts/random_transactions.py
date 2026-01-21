@@ -113,9 +113,7 @@ class RandomTransaction(ScriptStrategyBase):
                 mnemonic, address = item.split(":")
                 accounts.append({"key": mnemonic.strip(), "address": address.strip()})
             except ValueError:
-                raise ValueError(
-                    f"Invalid format for '{item}'. Use: 'mnemonic1:address1,mnemonic2:address2,...'"
-                )
+                raise ValueError(f"Invalid format for '{item}'. Use: 'mnemonic1:address1,mnemonic2:address2,...'")
         return accounts
 
     @property
@@ -206,15 +204,17 @@ class RandomTransaction(ScriptStrategyBase):
             f"\nTransaction Amount Range: {self.convert_from_micro_denom_to_denom(self.config.min_tx_amount)} - {self.convert_from_micro_denom_to_denom(self.config.max_tx_amount)} {denom}"
             f"\nDelay Order Time: {self.config.min_delay} seconds + Random Delay: 0 - {self.config.max_delay} seconds"
             f"\nNumber of Accounts: {len(self.accounts)}"
-            "\n"
-            "\nTotal Cumulating Transactions:"
-            f"\nTotal Transactions: {self.cumulating_transactions.total_transactions}"
-            f"\nTotal Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount)} {denom}"
-            f"\nAverage Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount / self.cumulating_transactions.total_transactions)} {denom}"
-            "\n"
-            "\nCumulating Transactions by Account:"
         )
+        if self.cumulating_transactions.total_transactions:
+            tsx_info += (
+                "\n"
+                "\nTotal Cumulating Transactions:"
+                f"\nTotal Transactions: {self.cumulating_transactions.total_transactions}"
+                f"\nTotal Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount)} {denom}"
+                f"\nAverage Amount: {self.convert_from_micro_denom_to_denom(self.cumulating_transactions.total_amount / self.cumulating_transactions.total_transactions)} {denom}"
+            )
 
+        tsx_info += "\n\nCumulating Transactions by Account:"
         for account in self.accounts:
             tsx_info += f"\nAccount: {account['address']}"
             cumulating_transactions = self.cumulating_transactions.get_account_transactions(account["address"])
