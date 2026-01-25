@@ -5,9 +5,12 @@ This module contains pure functions for price calculations
 with no side effects or dependencies on external state.
 """
 
+import logging
 import math
 from decimal import Decimal
 from typing import Union
+
+logger = logging.getLogger(__name__)
 
 # Type alias for numeric values
 Numeric = Union[Decimal, float, int]
@@ -32,13 +35,19 @@ def round_to_tick_size(value: Numeric, tick_size: Numeric) -> Decimal:
         >>> round_to_tick_size(100.567, 0.1)
         Decimal('100.5')
     """
-    value_dec = Decimal(str(value))
-    tick_dec = Decimal(str(tick_size))
+    try:
+        value_dec = Decimal(str(value))
+        tick_dec = Decimal(str(tick_size))
 
-    if tick_dec == 0:
-        return value_dec
+        if tick_dec == 0:
+            return value_dec
 
-    return Decimal(str(math.floor(value_dec / tick_dec))) * tick_dec
+        return Decimal(str(math.floor(value_dec / tick_dec))) * tick_dec
+    except Exception as e:
+        logger.error(
+            f"Error in round_to_tick_size(value={value}, tick_size={tick_size}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_spread_percent(bid: Numeric, ask: Numeric) -> Decimal:
@@ -58,16 +67,22 @@ def calculate_spread_percent(bid: Numeric, ask: Numeric) -> Decimal:
         >>> calculate_spread_percent(100, 101)
         Decimal('0.995...')  # approximately 1%
     """
-    bid_dec = Decimal(str(bid))
-    ask_dec = Decimal(str(ask))
+    try:
+        bid_dec = Decimal(str(bid))
+        ask_dec = Decimal(str(ask))
 
-    if bid_dec + ask_dec == 0:
-        return Decimal("0")
+        if bid_dec + ask_dec == 0:
+            return Decimal("0")
 
-    mid_price = (ask_dec + bid_dec) / 2
-    spread = ask_dec - bid_dec
+        mid_price = (ask_dec + bid_dec) / 2
+        spread = ask_dec - bid_dec
 
-    return (spread / mid_price) * Decimal("100")
+        return (spread / mid_price) * Decimal("100")
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_spread_percent(bid={bid}, ask={ask}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def is_price_in_range(
@@ -94,13 +109,19 @@ def is_price_in_range(
         >>> is_price_in_range(40, 40, 60, exclusive=True)
         False
     """
-    price_dec = Decimal(str(price))
-    low_dec = Decimal(str(low))
-    high_dec = Decimal(str(high))
+    try:
+        price_dec = Decimal(str(price))
+        low_dec = Decimal(str(low))
+        high_dec = Decimal(str(high))
 
-    if exclusive:
-        return low_dec < price_dec < high_dec
-    return low_dec <= price_dec <= high_dec
+        if exclusive:
+            return low_dec < price_dec < high_dec
+        return low_dec <= price_dec <= high_dec
+    except Exception as e:
+        logger.error(
+            f"Error in is_price_in_range(price={price}, low={low}, high={high}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def basis_points_to_decimal(basis_points: Numeric) -> Decimal:
@@ -121,7 +142,13 @@ def basis_points_to_decimal(basis_points: Numeric) -> Decimal:
         >>> basis_points_to_decimal(50)
         Decimal('0.005')  # 50 bps = 0.5%
     """
-    return Decimal(str(basis_points)) / Decimal("10000")
+    try:
+        return Decimal(str(basis_points)) / Decimal("10000")
+    except Exception as e:
+        logger.error(
+            f"Error in basis_points_to_decimal(basis_points={basis_points}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_price_adjustment(
@@ -146,11 +173,17 @@ def calculate_price_adjustment(
         >>> calculate_price_adjustment(100, 5, False)
         Decimal('-5')  # -5% of 100
     """
-    base_dec = Decimal(str(base_price))
-    perc_dec = Decimal(str(percentage)) / Decimal("100")
+    try:
+        base_dec = Decimal(str(base_price))
+        perc_dec = Decimal(str(percentage)) / Decimal("100")
 
-    adjustment = base_dec * perc_dec
-    return adjustment if is_positive else -adjustment
+        adjustment = base_dec * perc_dec
+        return adjustment if is_positive else -adjustment
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_price_adjustment(base_price={base_price}, percentage={percentage}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def clamp_price(
@@ -177,11 +210,17 @@ def clamp_price(
         >>> clamp_price(70, 40, 60)
         Decimal('60')
     """
-    price_dec = Decimal(str(price))
-    min_dec = Decimal(str(min_price))
-    max_dec = Decimal(str(max_price))
+    try:
+        price_dec = Decimal(str(price))
+        min_dec = Decimal(str(min_price))
+        max_dec = Decimal(str(max_price))
 
-    return max(min_dec, min(max_dec, price_dec))
+        return max(min_dec, min(max_dec, price_dec))
+    except Exception as e:
+        logger.error(
+            f"Error in clamp_price(price={price}, min_price={min_price}, max_price={max_price}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_mid_price(bid: Numeric, ask: Numeric) -> Decimal:
@@ -195,9 +234,15 @@ def calculate_mid_price(bid: Numeric, ask: Numeric) -> Decimal:
     Returns:
         The mid price
     """
-    bid_dec = Decimal(str(bid))
-    ask_dec = Decimal(str(ask))
-    return (bid_dec + ask_dec) / Decimal("2")
+    try:
+        bid_dec = Decimal(str(bid))
+        ask_dec = Decimal(str(ask))
+        return (bid_dec + ask_dec) / Decimal("2")
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_mid_price(bid={bid}, ask={ask}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_price_change_percent(
@@ -220,13 +265,19 @@ def calculate_price_change_percent(
         >>> calculate_price_change_percent(100, 90)
         Decimal('-10')  # 10% decrease
     """
-    start_dec = Decimal(str(start_price))
-    end_dec = Decimal(str(end_price))
+    try:
+        start_dec = Decimal(str(start_price))
+        end_dec = Decimal(str(end_price))
 
-    if start_dec == 0:
-        return Decimal("0")
+        if start_dec == 0:
+            return Decimal("0")
 
-    return ((end_dec - start_dec) / start_dec) * Decimal("100")
+        return ((end_dec - start_dec) / start_dec) * Decimal("100")
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_price_change_percent(start_price={start_price}, end_price={end_price}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def compare_numbers(num1: Numeric, operator: str, num2: Numeric) -> bool:
@@ -250,18 +301,24 @@ def compare_numbers(num1: Numeric, operator: str, num2: Numeric) -> bool:
         >>> compare_numbers(Decimal("100"), ">", 99.5)
         True
     """
-    dec1 = Decimal(str(num1))
-    dec2 = Decimal(str(num2))
+    try:
+        dec1 = Decimal(str(num1))
+        dec2 = Decimal(str(num2))
 
-    if operator == "==":
-        return dec1 == dec2
-    elif operator == ">":
-        return dec1 > dec2
-    elif operator == "<":
-        return dec1 < dec2
-    elif operator == ">=":
-        return dec1 >= dec2
-    elif operator == "<=":
-        return dec1 <= dec2
-    else:
-        raise ValueError(f"Unknown operator: {operator}")
+        if operator == "==":
+            return dec1 == dec2
+        elif operator == ">":
+            return dec1 > dec2
+        elif operator == "<":
+            return dec1 < dec2
+        elif operator == ">=":
+            return dec1 >= dec2
+        elif operator == "<=":
+            return dec1 <= dec2
+        else:
+            raise ValueError(f"Unknown operator: {operator}")
+    except Exception as e:
+        logger.error(
+            f"Error in compare_numbers(num1={num1}, operator={operator}, num2={num2}): {type(e).__name__}: {e}"
+        )
+        raise

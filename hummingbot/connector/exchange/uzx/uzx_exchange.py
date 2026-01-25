@@ -629,26 +629,39 @@ class UzxExchange(ExchangePyBase):
             "un_filled_amount": 0
         },
         """
-        unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(market)
-        for order in unfilled_or_partially_filled_response:
-            if any([str(ifo.exchange_order_id) == str(order["order_id"]) for ifo in self.in_flight_orders.values()]):
-                continue
-            client_order_id = order["cl_ord_id"]
-            if client_order_id == "":
-                client_order_id = order["order_id"]
-            in_flight_order = InFlightOrder(
-                amount=Decimal(order["lock_base_amount"]),
-                client_order_id=str(client_order_id),
-                creation_timestamp=float(order["created_at"]),
-                exchange_order_id=str(order["order_id"]),
-                price=Decimal(order["price"]),
-                trading_pair=order["product_name"],
-                trade_type=(
-                    TradeType.BUY
-                    if order["order_buy_or_sell"] == CONSTANTS.Order_Direction.buy.value
-                    else TradeType.SELL
-                ),
-                order_type=OrderType.LIMIT,
-                initial_state=(CONSTANTS.ORDER_STATE[order["status"]]),
+        try:
+            unfilled_or_partially_filled_response = await self._get_unfilled_or_partially_filled_response(market)
+        except Exception as e:
+            self.logger().error(
+                f"Error in track_all_open_orders (get_unfilled_response): {type(e).__name__}: {e}"
             )
-            self._order_tracker.start_tracking_order(in_flight_order)
+            raise
+
+        for order in unfilled_or_partially_filled_response:
+            try:
+                if any([str(ifo.exchange_order_id) == str(order["order_id"]) for ifo in self.in_flight_orders.values()]):
+                    continue
+                client_order_id = order["cl_ord_id"]
+                if client_order_id == "":
+                    client_order_id = order["order_id"]
+                in_flight_order = InFlightOrder(
+                    amount=Decimal(order["lock_base_amount"]),
+                    client_order_id=str(client_order_id),
+                    creation_timestamp=float(order["created_at"]),
+                    exchange_order_id=str(order["order_id"]),
+                    price=Decimal(order["price"]),
+                    trading_pair=order["product_name"],
+                    trade_type=(
+                        TradeType.BUY
+                        if order["order_buy_or_sell"] == CONSTANTS.Order_Direction.buy.value
+                        else TradeType.SELL
+                    ),
+                    order_type=OrderType.LIMIT,
+                    initial_state=(CONSTANTS.ORDER_STATE[order["status"]]),
+                )
+                self._order_tracker.start_tracking_order(in_flight_order)
+            except Exception as e:
+                self.logger().error(
+                    f"Error in track_all_open_orders (processing order {order.get('order_id', 'unknown')}): {type(e).__name__}: {e}"
+                )
+                raise

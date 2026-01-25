@@ -5,6 +5,7 @@ This service handles the generation of volume orders - matched buy/sell
 pairs that create trading volume on the exchange.
 """
 
+import logging
 import random
 from decimal import Decimal
 from typing import List, Tuple
@@ -19,6 +20,8 @@ from hummingbot.strategy_v2.volume_pumper.utils.price_utils import (
     is_price_in_range,
     round_to_tick_size,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class VolumeOrderService:
@@ -63,12 +66,24 @@ class VolumeOrderService:
     @property
     def price_tick_size(self) -> Decimal:
         """Get the price tick size."""
-        return self._market_data.price_tick_size
+        try:
+            return self._market_data.price_tick_size
+        except Exception as e:
+            logger.error(
+                f"Error in price_tick_size: {type(e).__name__}: {e}"
+            )
+            raise
 
     @property
     def amount_tick_size(self) -> Decimal:
         """Get the amount tick size."""
-        return self._market_data.amount_tick_size
+        try:
+            return self._market_data.amount_tick_size
+        except Exception as e:
+            logger.error(
+                f"Error in amount_tick_size: {type(e).__name__}: {e}"
+            )
+            raise
 
     def calculate_order_price(self) -> Tuple[Decimal, Decimal, Decimal]:
         """
@@ -80,31 +95,37 @@ class VolumeOrderService:
         Returns:
             Tuple of (ask_price, bid_price, order_price)
         """
-        best_ask = self._market_data.get_best_ask()
-        best_bid = self._market_data.get_best_bid()
-        last_trade = self._market_data.get_last_trade_price()
+        try:
+            best_ask = self._market_data.get_best_ask()
+            best_bid = self._market_data.get_best_bid()
+            last_trade = self._market_data.get_last_trade_price()
 
-        # Validate last trade price
-        if last_trade < best_bid or last_trade > best_ask:
-            last_trade = self._market_data.get_mid_price()
+            # Validate last trade price
+            if last_trade < best_bid or last_trade > best_ask:
+                last_trade = self._market_data.get_mid_price()
 
-        # Update price movement direction
-        self._update_price_movement(best_ask, best_bid, last_trade)
+            # Update price movement direction
+            self._update_price_movement(best_ask, best_bid, last_trade)
 
-        # Calculate order price with random offset
-        direction = 1 if self._current_price_movement == "up" else -1
-        random_ticks = random_int(0, 5)
-        order_price = last_trade + self.price_tick_size * Decimal(random_ticks) * direction
+            # Calculate order price with random offset
+            direction = 1 if self._current_price_movement == "up" else -1
+            random_ticks = random_int(0, 5)
+            order_price = last_trade + self.price_tick_size * Decimal(random_ticks) * direction
 
-        # Ensure price is within spread
-        if order_price < best_bid:
-            order_price = best_bid + self.price_tick_size
-        if order_price > best_ask:
-            order_price = best_ask - self.price_tick_size
+            # Ensure price is within spread
+            if order_price < best_bid:
+                order_price = best_bid + self.price_tick_size
+            if order_price > best_ask:
+                order_price = best_ask - self.price_tick_size
 
-        order_price = round_to_tick_size(order_price, self.price_tick_size)
+            order_price = round_to_tick_size(order_price, self.price_tick_size)
 
-        return best_ask, best_bid, order_price
+            return best_ask, best_bid, order_price
+        except Exception as e:
+            logger.error(
+                f"Error in calculate_order_price: {type(e).__name__}: {e}"
+            )
+            raise
 
     def _update_price_movement(
         self,
@@ -119,19 +140,25 @@ class VolumeOrderService:
         - Near bid: more likely to flip to "up"
         - Near ask: more likely to flip to "down"
         """
-        bid_distance = percent_distance_from_bid(ask, bid, last_trade)
+        try:
+            bid_distance = percent_distance_from_bid(ask, bid, last_trade)
 
-        if self._current_price_movement == "down":
-            # Lower bid distance = higher chance to flip up
-            flip_probability = (1 - float(bid_distance) / 100) ** 3
-        else:
-            # Higher bid distance = higher chance to flip down
-            flip_probability = (float(bid_distance) / 100) ** 3
+            if self._current_price_movement == "down":
+                # Lower bid distance = higher chance to flip up
+                flip_probability = (1 - float(bid_distance) / 100) ** 3
+            else:
+                # Higher bid distance = higher chance to flip down
+                flip_probability = (float(bid_distance) / 100) ** 3
 
-        if random.uniform(0, 1) < flip_probability:
-            self._current_price_movement = (
-                "up" if self._current_price_movement == "down" else "down"
+            if random.uniform(0, 1) < flip_probability:
+                self._current_price_movement = (
+                    "up" if self._current_price_movement == "down" else "down"
+                )
+        except Exception as e:
+            logger.error(
+                f"Error in _update_price_movement: {type(e).__name__}: {e}"
             )
+            raise
 
     def calculate_order_amount(self, order_price: Decimal) -> Decimal:
         """
@@ -147,20 +174,26 @@ class VolumeOrderService:
         Returns:
             The calculated order amount
         """
-        # Generate random amount within range
-        random_amount = random_int(self._order_lower_amount, self._order_upper_amount)
-        amount = Decimal(str(random_amount))
+        try:
+            # Generate random amount within range
+            random_amount = random_int(self._order_lower_amount, self._order_upper_amount)
+            amount = Decimal(str(random_amount))
 
-        # Adjust for available balance
-        sell_amount = self._market_data.adjust_amount_for_balance(
-            order_price, amount, TradeType.SELL
-        )
-        buy_amount = self._market_data.adjust_amount_for_balance(
-            order_price, amount, TradeType.BUY
-        )
+            # Adjust for available balance
+            sell_amount = self._market_data.adjust_amount_for_balance(
+                order_price, amount, TradeType.SELL
+            )
+            buy_amount = self._market_data.adjust_amount_for_balance(
+                order_price, amount, TradeType.BUY
+            )
 
-        # Return the smaller of the two to ensure both orders can be placed
-        return min(sell_amount, buy_amount)
+            # Return the smaller of the two to ensure both orders can be placed
+            return min(sell_amount, buy_amount)
+        except Exception as e:
+            logger.error(
+                f"Error in calculate_order_amount: {type(e).__name__}: {e}"
+            )
+            raise
 
     def generate_order_pair(
         self,
@@ -177,18 +210,24 @@ class VolumeOrderService:
         Returns:
             List containing [sell_order, buy_order]
         """
-        sell_order = self._order_adapter.create_order_candidate(
-            price=price,
-            amount=amount,
-            is_buy=False,
-        )
-        buy_order = self._order_adapter.create_order_candidate(
-            price=price,
-            amount=amount,
-            is_buy=True,
-        )
+        try:
+            sell_order = self._order_adapter.create_order_candidate(
+                price=price,
+                amount=amount,
+                is_buy=False,
+            )
+            buy_order = self._order_adapter.create_order_candidate(
+                price=price,
+                amount=amount,
+                is_buy=True,
+            )
 
-        return [sell_order, buy_order]
+            return [sell_order, buy_order]
+        except Exception as e:
+            logger.error(
+                f"Error in generate_order_pair: {type(e).__name__}: {e}"
+            )
+            raise
 
     def is_spread_acceptable(self, ask: Decimal, bid: Decimal) -> bool:
         """
@@ -201,8 +240,14 @@ class VolumeOrderService:
         Returns:
             True if spread is acceptable
         """
-        spread = ask - bid
-        return spread >= self._minimum_spread_decimal
+        try:
+            spread = ask - bid
+            return spread >= self._minimum_spread_decimal
+        except Exception as e:
+            logger.error(
+                f"Error in is_spread_acceptable: {type(e).__name__}: {e}"
+            )
+            raise
 
     def is_price_in_spread(
         self,
@@ -221,7 +266,13 @@ class VolumeOrderService:
         Returns:
             True if price is within spread (exclusive bounds)
         """
-        return is_price_in_range(price, bid, ask, exclusive=True)
+        try:
+            return is_price_in_range(price, bid, ask, exclusive=True)
+        except Exception as e:
+            logger.error(
+                f"Error in is_price_in_spread: {type(e).__name__}: {e}"
+            )
+            raise
 
     def is_amount_sufficient(self, amount: Decimal) -> bool:
         """
@@ -233,7 +284,13 @@ class VolumeOrderService:
         Returns:
             True if amount is >= order_lower_amount
         """
-        return amount >= Decimal(str(self._order_lower_amount))
+        try:
+            return amount >= Decimal(str(self._order_lower_amount))
+        except Exception as e:
+            logger.error(
+                f"Error in is_amount_sufficient: {type(e).__name__}: {e}"
+            )
+            raise
 
     @property
     def current_price_movement(self) -> str:

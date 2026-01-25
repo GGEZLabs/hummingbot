@@ -21,19 +21,16 @@ DEFAULT_DOMAIN = "com"
 REST_CANCEL_BATCH_ORDERS = "/trade/order/cancelBatch"
 REST_CANCEL_ORDER = "/trade/order/cancel"
 REST_CREATE_ORDER = "/trade/order/place"
-REST_DEPTH = "/v1/market/depth"
 REST_ACTIVE_ORDERS = "/trade/order/active"
 ACCOUNT_MATCHES_TRADE = "/trade/match/accountMatches"
-REST_ORDER_INFO = "/v2/trade/order/orderInfo"
 
 TICKER_PRICE_PATH_URL = "/v1/ticker/price"
 TICKER_BOOK_PATH_URL = "/v1/market/tickers"  # ticker book latest traded price
 MY_TRADES_PATH_URL = "/trade/match/accountMatches"
-SNAPSHOT_PATH_URL = REST_DEPTH  # order book
-ORDER_INFO_PATH_URL = REST_ORDER_INFO
+SNAPSHOT_PATH_URL = "/v1/market/depth"  # order book
+ORDER_INFO_PATH_URL = "/v2/trade/order/orderInfo"
 ACCOUNTS_PATH_URL = "/spot/accountList"
 EXCHANGE_INFO_PATH_URL = "/v2/public/config/spot/symbols"
-# SNAPSHOT_PATH_URL
 
 # METHOD
 GET = "GET"
@@ -58,8 +55,8 @@ LOCALE = "Locale="
 SAME_IP_REQUESTS_ID = "SAME_IP_REQUESTS"
 SAME_USER_REQUESTS_ID = "SAME_USER_REQUESTS"
 
-SAME_IP_REQUEST_LIMIT = 6
-SAME_USER_REQUEST_LIMIT = 3
+SAME_IP_REQUEST_LIMIT = 4
+SAME_USER_REQUEST_LIMIT = 2
 
 # cache time
 OPEN_ORDERS_CACHE_TIME = 10

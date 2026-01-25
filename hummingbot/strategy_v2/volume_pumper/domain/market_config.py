@@ -36,88 +36,46 @@ class VolumePumperMarketConfig(BaseModel):
     )
 
     # --- Static Boundaries (Fixed price levels) ---
-    static_support: Decimal = Field(
-        description="Fixed support price level - absolute floor for orders"
-    )
-    static_resistance: Decimal = Field(
-        description="Fixed resistance price level - absolute ceiling for orders"
-    )
+    static_support: Decimal = Field(description="Fixed support price level - absolute floor for orders")
+    static_resistance: Decimal = Field(description="Fixed resistance price level - absolute ceiling for orders")
 
     # --- Flexible Boundaries (Dynamic price levels) ---
-    flexible_support: Decimal = Field(
-        description="Current dynamic support level - drifts based on movement"
-    )
-    flexible_resistance: Decimal = Field(
-        description="Current dynamic resistance level - drifts based on movement"
-    )
+    flexible_support: Decimal = Field(description="Current dynamic support level - drifts based on movement")
+    flexible_resistance: Decimal = Field(description="Current dynamic resistance level - drifts based on movement")
 
     # --- Phase Timing ---
-    phase_start_time: float = Field(
-        description="Unix timestamp when current phase started"
-    )
-    phase_end_time: float = Field(
-        description="Unix timestamp when current phase should end"
-    )
-    minimum_phase_period: float = Field(
-        ge=0,
-        description="Minimum duration of a phase in seconds"
-    )
-    maximum_phase_period: float = Field(
-        ge=0,
-        description="Maximum duration of a phase in seconds"
-    )
+    phase_start_time: float = Field(description="Unix timestamp when current phase started")
+    phase_end_time: float = Field(description="Unix timestamp when current phase should end")
+    minimum_phase_period: float = Field(ge=0, description="Minimum duration of a phase in seconds")
+    maximum_phase_period: float = Field(ge=0, description="Maximum duration of a phase in seconds")
 
     # --- Phase Pricing ---
-    phase_start_price: Decimal = Field(
-        description="Price when current phase started"
-    )
-    phase_end_price: Decimal = Field(
-        description="Target price for end of phase"
-    )
+    phase_start_price: Decimal = Field(description="Price when current phase started")
+    phase_end_price: Decimal = Field(description="Target price for end of phase")
     minimum_phase_price_change_perc: Decimal = Field(
-        ge=0,
-        description="Minimum price change percentage per phase (1 = 1%)"
+        ge=0, description="Minimum price change percentage per phase (1 = 1%)"
     )
     maximum_phase_price_change_perc: Decimal = Field(
-        ge=0,
-        description="Maximum price change percentage per phase (1 = 1%)"
+        ge=0, description="Maximum price change percentage per phase (1 = 1%)"
     )
 
     # --- Drift and Spread ---
-    target_drift_per_interval: Decimal = Field(
-        description="How much boundaries should drift per update cycle"
-    )
-    minimum_flexible_wall_spread: Decimal = Field(
-        ge=0,
-        description="Minimum spread between flexible boundaries"
-    )
-    maximum_flexible_wall_spread: Decimal = Field(
-        ge=0,
-        description="Maximum spread between flexible boundaries"
-    )
-    current_flexible_wall_spread: Decimal = Field(
-        ge=0,
-        description="Current spread being used"
-    )
+    target_drift_per_interval: Decimal = Field(description="How much boundaries should drift per update cycle")
+    minimum_flexible_wall_spread: Decimal = Field(ge=0, description="Minimum spread between flexible boundaries")
+    maximum_flexible_wall_spread: Decimal = Field(ge=0, description="Maximum spread between flexible boundaries")
+    current_flexible_wall_spread: Decimal = Field(ge=0, description="Current spread being used")
 
     # --- Update Intervals ---
     minimum_boundaries_update_interval: float = Field(
-        ge=0,
-        description="Minimum time between boundary updates in seconds"
+        ge=0, description="Minimum time between boundary updates in seconds"
     )
     maximum_boundaries_update_interval: float = Field(
-        ge=0,
-        description="Maximum time between boundary updates in seconds"
+        ge=0, description="Maximum time between boundary updates in seconds"
     )
-    current_boundaries_update_interval: float = Field(
-        ge=0,
-        description="Current update interval being used"
-    )
+    current_boundaries_update_interval: float = Field(ge=0, description="Current update interval being used")
 
     # --- Order Configuration ---
-    order_levels_steps: Decimal = Field(
-        description="Price step between adjacent order levels"
-    )
+    order_levels_steps: Decimal = Field(description="Price step between adjacent order levels")
 
     @field_validator("movement_type")
     @classmethod
@@ -156,6 +114,8 @@ class VolumePumperMarketConfig(BaseModel):
         cls,
         static_support: Decimal,
         static_resistance: Decimal,
+        flexible_support: Decimal,
+        flexible_resistance: Decimal,
         current_price: Decimal,
         current_time: float,
         flexible_wall_spread: Decimal,
@@ -187,10 +147,6 @@ class VolumePumperMarketConfig(BaseModel):
         Returns:
             A new VolumePumperMarketConfig instance
         """
-        # Calculate initial flexible boundaries
-        half_spread = current_price * (flexible_wall_spread / Decimal("200"))
-        flexible_support = max(current_price - half_spread, static_support)
-        flexible_resistance = min(current_price + half_spread, static_resistance)
 
         return cls(
             movement_type=MovementType.SIDEWAYS.value,

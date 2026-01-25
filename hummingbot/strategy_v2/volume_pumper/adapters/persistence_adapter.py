@@ -6,6 +6,7 @@ for loading and saving market configuration.
 """
 
 import json
+import logging
 import time
 from typing import Optional
 
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from hummingbot.model.market_config import MarketConfig
 from hummingbot.strategy_v2.volume_pumper.domain.market_config import VolumePumperMarketConfig
+
+logger = logging.getLogger(__name__)
 
 
 class PersistenceAdapter:
@@ -64,7 +67,13 @@ class PersistenceAdapter:
         Returns:
             True if configuration exists, False otherwise
         """
-        return self._get_raw_config() is not None
+        try:
+            return self._get_raw_config() is not None
+        except Exception as e:
+            logger.error(
+                f"Error in config_exists: {type(e).__name__}: {e}"
+            )
+            raise
 
     def _get_raw_config(self) -> Optional[MarketConfig]:
         """
@@ -73,14 +82,20 @@ class PersistenceAdapter:
         Returns:
             MarketConfig or None if not found
         """
-        return (
-            self._session.query(MarketConfig)
-            .filter(
-                MarketConfig.trading_pair == self._trading_pair,
-                MarketConfig.strategy_name == self._strategy_name,
+        try:
+            return (
+                self._session.query(MarketConfig)
+                .filter(
+                    MarketConfig.trading_pair == self._trading_pair,
+                    MarketConfig.strategy_name == self._strategy_name,
+                )
+                .first()
             )
-            .first()
-        )
+        except Exception as e:
+            logger.error(
+                f"Error in _get_raw_config: {type(e).__name__}: {e}"
+            )
+            raise
 
     def load_config(self) -> Optional[VolumePumperMarketConfig]:
         """
@@ -89,11 +104,17 @@ class PersistenceAdapter:
         Returns:
             VolumePumperMarketConfig or None if not found
         """
-        raw_config = self._get_raw_config()
-        if raw_config is None:
-            return None
+        try:
+            raw_config = self._get_raw_config()
+            if raw_config is None:
+                return None
 
-        return VolumePumperMarketConfig(**raw_config.config)
+            return VolumePumperMarketConfig(**raw_config.config)
+        except Exception as e:
+            logger.error(
+                f"Error in load_config: {type(e).__name__}: {e}"
+            )
+            raise
 
     def save_config(self, config: VolumePumperMarketConfig) -> bool:
         """
@@ -108,37 +129,43 @@ class PersistenceAdapter:
         Returns:
             True if saved successfully
         """
-        current_time = time.time()
-        config_dict = json.loads(config.model_dump_json())
+        try:
+            current_time = time.time()
+            config_dict = json.loads(config.model_dump_json())
 
-        existing = self._get_raw_config()
+            existing = self._get_raw_config()
 
-        if existing:
-            # Update existing config
-            result = (
-                self._session.query(MarketConfig)
-                .filter(
-                    MarketConfig.trading_pair == self._trading_pair,
-                    MarketConfig.strategy_name == self._strategy_name,
+            if existing:
+                # Update existing config
+                result = (
+                    self._session.query(MarketConfig)
+                    .filter(
+                        MarketConfig.trading_pair == self._trading_pair,
+                        MarketConfig.strategy_name == self._strategy_name,
+                    )
+                    .update({
+                        "config": config_dict,
+                        "last_updated": current_time,
+                    })
                 )
-                .update({
-                    "config": config_dict,
-                    "last_updated": current_time,
-                })
+                self._session.commit()
+                return result > 0
+            else:
+                # Create new config
+                new_config = MarketConfig(
+                    trading_pair=self._trading_pair,
+                    strategy_name=self._strategy_name,
+                    config=config_dict,
+                    last_updated=current_time,
+                )
+                self._session.add(new_config)
+                self._session.commit()
+                return True
+        except Exception as e:
+            logger.error(
+                f"Error in save_config: {type(e).__name__}: {e}"
             )
-            self._session.commit()
-            return result > 0
-        else:
-            # Create new config
-            new_config = MarketConfig(
-                trading_pair=self._trading_pair,
-                strategy_name=self._strategy_name,
-                config=config_dict,
-                last_updated=current_time,
-            )
-            self._session.add(new_config)
-            self._session.commit()
-            return True
+            raise
 
     def get_last_updated(self) -> float:
         """
@@ -147,10 +174,16 @@ class PersistenceAdapter:
         Returns:
             Unix timestamp of last update, or 0 if not found
         """
-        raw_config = self._get_raw_config()
-        if raw_config is None:
-            return 0
-        return raw_config.last_updated
+        try:
+            raw_config = self._get_raw_config()
+            if raw_config is None:
+                return 0
+            return raw_config.last_updated
+        except Exception as e:
+            logger.error(
+                f"Error in get_last_updated: {type(e).__name__}: {e}"
+            )
+            raise
 
     def delete_config(self) -> bool:
         """
@@ -159,16 +192,22 @@ class PersistenceAdapter:
         Returns:
             True if deleted successfully
         """
-        result = (
-            self._session.query(MarketConfig)
-            .filter(
-                MarketConfig.trading_pair == self._trading_pair,
-                MarketConfig.strategy_name == self._strategy_name,
+        try:
+            result = (
+                self._session.query(MarketConfig)
+                .filter(
+                    MarketConfig.trading_pair == self._trading_pair,
+                    MarketConfig.strategy_name == self._strategy_name,
+                )
+                .delete()
             )
-            .delete()
-        )
-        self._session.commit()
-        return result > 0
+            self._session.commit()
+            return result > 0
+        except Exception as e:
+            logger.error(
+                f"Error in delete_config: {type(e).__name__}: {e}"
+            )
+            raise
 
     def refresh(self) -> None:
         """
@@ -176,4 +215,10 @@ class PersistenceAdapter:
 
         This clears any cached data and ensures fresh reads.
         """
-        self._session.expire_all()
+        try:
+            self._session.expire_all()
+        except Exception as e:
+            logger.error(
+                f"Error in refresh: {type(e).__name__}: {e}"
+            )
+            raise

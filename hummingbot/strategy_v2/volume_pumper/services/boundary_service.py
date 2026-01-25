@@ -167,25 +167,37 @@ class BoundaryService:
         """
         orders = []
 
-        # Generate sell orders (resistance side)
-        orders.extend(
-            self._generate_level_orders(
-                start_price=config.flexible_resistance,
-                end_price=config.static_resistance,
-                is_buy=False,
-                order_levels_steps=config.order_levels_steps,
+        try:
+            # Generate sell orders (resistance side)
+            orders.extend(
+                self._generate_level_orders(
+                    start_price=config.flexible_resistance,
+                    end_price=config.static_resistance,
+                    is_buy=False,
+                    order_levels_steps=config.order_levels_steps,
+                )
             )
-        )
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in generate_boundary_orders (sell orders): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Generate buy orders (support side)
-        orders.extend(
-            self._generate_level_orders(
-                start_price=config.flexible_support,
-                end_price=config.static_support,
-                is_buy=True,
-                order_levels_steps=config.order_levels_steps,
+        try:
+            # Generate buy orders (support side)
+            orders.extend(
+                self._generate_level_orders(
+                    start_price=config.flexible_support,
+                    end_price=config.static_support,
+                    is_buy=True,
+                    order_levels_steps=config.order_levels_steps,
+                )
             )
-        )
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in generate_boundary_orders (buy orders): {type(e).__name__}: {e}"
+            )
+            raise
 
         return orders
 
@@ -208,51 +220,69 @@ class BoundaryService:
         Returns:
             List of OrderCandidates
         """
-        # Calculate spread percentage between start and end
-        spread_percent = calculate_spread_percent(
-            bid=end_price if is_buy else start_price,
-            ask=start_price if is_buy else end_price,
-        )
+        try:
+            # Calculate spread percentage between start and end
+            spread_percent = calculate_spread_percent(
+                bid=end_price if is_buy else start_price,
+                ask=start_price if is_buy else end_price,
+            )
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in _generate_level_orders (calculate_spread_percent): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Generate level positions
-        levels = list(np.arange(0, float(spread_percent), float(order_levels_steps)))
+        try:
+            # Generate level positions
+            levels = list(np.arange(0, float(spread_percent), float(order_levels_steps)))
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in _generate_level_orders (np.arange): {type(e).__name__}: {e}"
+            )
+            raise
 
         if not levels:
             return []
 
         orders = []
         for level in levels:
-            # Calculate price for this level
-            price_adjustment = start_price * Decimal(str(level)) / Decimal("100")
+            try:
+                # Calculate price for this level
+                price_adjustment = start_price * Decimal(str(level)) / Decimal("100")
 
-            if is_buy:
-                price = start_price - price_adjustment
-            else:
-                price = start_price + price_adjustment
+                if is_buy:
+                    price = start_price - price_adjustment
+                else:
+                    price = start_price + price_adjustment
 
-            price = round_to_tick_size(price, self.price_tick_size)
+                price = round_to_tick_size(price, self.price_tick_size)
 
-            # Calculate amount using geometric progression
-            amount = geometric_amount(
-                position=levels.index(level),
-                total_levels=len(levels),
-                total_balance=self._max_allowed_depth,
-            )
-            amount = round_to_tick_size(amount, self.amount_tick_size)
+                # Calculate amount using geometric progression
+                amount = geometric_amount(
+                    position=levels.index(level),
+                    total_levels=len(levels),
+                    total_balance=self._max_allowed_depth,
+                )
+                amount = round_to_tick_size(amount, self.amount_tick_size)
 
-            # Ensure minimum notional size
-            min_notional = self._market_data.get_min_notional_size()
-            min_amount = round_to_tick_size(
-                min_notional / price, self.amount_tick_size
-            )
-            amount = max(amount, min_amount)
+                # Ensure minimum notional size
+                min_notional = self._market_data.get_min_notional_size()
+                min_amount = round_to_tick_size(
+                    min_notional / price, self.amount_tick_size
+                )
+                amount = max(amount, min_amount)
 
-            order = self._order_adapter.create_order_candidate(
-                price=price,
-                amount=amount,
-                is_buy=is_buy,
-            )
-            orders.append(order)
+                order = self._order_adapter.create_order_candidate(
+                    price=price,
+                    amount=amount,
+                    is_buy=is_buy,
+                )
+                orders.append(order)
+            except Exception as e:
+                self._market_data.connector.logger().error(
+                    f"Error in _generate_level_orders (level {level}): {type(e).__name__}: {e}"
+                )
+                raise
 
         return orders
 
@@ -383,7 +413,7 @@ class BoundaryService:
         except Exception as e:
             # Log error but return original plan to avoid blocking
             self._market_data.connector.logger().error(
-                f"Error removing already existing orders: {str(e)}"
+                f"Error removing already existing orders: {type(e).__name__}: {e}"
             )
             return action_plan
 
@@ -451,7 +481,7 @@ class BoundaryService:
 
         except Exception as e:
             self._market_data.connector.logger().error(
-                f"Error detecting conflicting orders: {str(e)}"
+                f"Error detecting conflicting orders: {type(e).__name__}: {e}"
             )
             return pd.DataFrame(), pd.DataFrame()
 
@@ -476,34 +506,52 @@ class BoundaryService:
             - Optimized OrderActionPlan
             - List of conflicting OrderCandidates (empty if no conflicts)
         """
-        # Step 1: Optimize the action plan
-        optimized_plan = self.remove_already_existing_orders(action_plan)
+        try:
+            # Step 1: Optimize the action plan
+            optimized_plan = self.remove_already_existing_orders(action_plan)
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in check_action_plan_conflicts (remove_already_existing_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Step 2: Detect conflicting orders
-        conflicting_bids, conflicting_asks = self.detect_conflicting_orders(config)
+        try:
+            # Step 2: Detect conflicting orders
+            conflicting_bids, conflicting_asks = self.detect_conflicting_orders(config)
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in check_action_plan_conflicts (detect_conflicting_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Step 3: Convert conflicts to OrderCandidates for tracking
-        conflicting_orders = []
+        try:
+            # Step 3: Convert conflicts to OrderCandidates for tracking
+            conflicting_orders = []
 
-        if not conflicting_bids.empty:
-            for row in conflicting_bids.itertuples():
-                conflicting_orders.append(
-                    self._order_adapter.create_order_candidate(
-                        price=Decimal(str(row.price)),
-                        amount=Decimal(str(row.amount)),
-                        is_buy=True,
+            if not conflicting_bids.empty:
+                for row in conflicting_bids.itertuples():
+                    conflicting_orders.append(
+                        self._order_adapter.create_order_candidate(
+                            price=Decimal(str(row.price)),
+                            amount=Decimal(str(row.amount)),
+                            is_buy=True,
+                        )
                     )
-                )
 
-        if not conflicting_asks.empty:
-            for row in conflicting_asks.itertuples():
-                conflicting_orders.append(
-                    self._order_adapter.create_order_candidate(
-                        price=Decimal(str(row.price)),
-                        amount=Decimal(str(row.amount)),
-                        is_buy=False,
+            if not conflicting_asks.empty:
+                for row in conflicting_asks.itertuples():
+                    conflicting_orders.append(
+                        self._order_adapter.create_order_candidate(
+                            price=Decimal(str(row.price)),
+                            amount=Decimal(str(row.amount)),
+                            is_buy=False,
+                        )
                     )
-                )
+        except Exception as e:
+            self._market_data.connector.logger().error(
+                f"Error in check_action_plan_conflicts (convert conflicts): {type(e).__name__}: {e}"
+            )
+            raise
 
         return optimized_plan, conflicting_orders
 

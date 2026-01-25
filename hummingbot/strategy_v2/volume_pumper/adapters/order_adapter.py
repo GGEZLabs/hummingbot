@@ -60,7 +60,13 @@ class OrderAdapter:
         Returns:
             Dictionary mapping order_id to InFlightOrder
         """
-        return self._connector.in_flight_orders
+        try:
+            return self._connector.in_flight_orders
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_in_flight_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     async def get_open_orders(self) -> Dict[str, InFlightOrder]:
         """
@@ -71,8 +77,14 @@ class OrderAdapter:
         Returns:
             Dictionary mapping order_id to InFlightOrder
         """
-        await self._connector.track_all_open_orders(self._trading_pair)
-        return self._connector.in_flight_orders
+        try:
+            await self._connector.track_all_open_orders(self._trading_pair)
+            return self._connector.in_flight_orders
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_open_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     def cancel_order(self, order_id: str) -> None:
         """
@@ -81,7 +93,13 @@ class OrderAdapter:
         Args:
             order_id: The client order ID to cancel
         """
-        self._connector.cancel(self._trading_pair, order_id)
+        try:
+            self._connector.cancel(self._trading_pair, order_id)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in cancel_order for {order_id}: {type(e).__name__}: {e}"
+            )
+            raise
 
     async def cancel_all_orders(self, timeout: int = 20) -> None:
         """
@@ -90,7 +108,13 @@ class OrderAdapter:
         Args:
             timeout: Timeout in seconds for the cancellation
         """
-        await self._connector.cancel_all(timeout)
+        try:
+            await self._connector.cancel_all(timeout)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in cancel_all_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     def cancel_all_orders_async(self, timeout: int = 20) -> None:
         """
@@ -99,7 +123,13 @@ class OrderAdapter:
         Args:
             timeout: Timeout in seconds for the cancellation
         """
-        safe_ensure_future(self._connector.cancel_all(timeout))
+        try:
+            safe_ensure_future(self._connector.cancel_all(timeout))
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in cancel_all_orders_async: {type(e).__name__}: {e}"
+            )
+            raise
 
     def stop_tracking_order(self, order_id: str) -> None:
         """
@@ -110,7 +140,13 @@ class OrderAdapter:
         Args:
             order_id: The client order ID to stop tracking
         """
-        self._connector._order_tracker.stop_tracking_order(order_id)
+        try:
+            self._connector._order_tracker.stop_tracking_order(order_id)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in stop_tracking_order for {order_id}: {type(e).__name__}: {e}"
+            )
+            raise
 
     def create_order_candidate(
         self,
@@ -129,14 +165,20 @@ class OrderAdapter:
         Returns:
             An OrderCandidate ready for execution
         """
-        return OrderCandidate(
-            trading_pair=self._trading_pair,
-            is_maker=True,
-            order_type=OrderType.LIMIT,
-            order_side=TradeType.BUY if is_buy else TradeType.SELL,
-            amount=Decimal(str(amount)),
-            price=Decimal(str(price)),
-        )
+        try:
+            return OrderCandidate(
+                trading_pair=self._trading_pair,
+                is_maker=True,
+                order_type=OrderType.LIMIT,
+                order_side=TradeType.BUY if is_buy else TradeType.SELL,
+                amount=Decimal(str(amount)),
+                price=Decimal(str(price)),
+            )
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in create_order_candidate: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_orders_by_price(self) -> Dict[str, List[InFlightOrder]]:
         """
@@ -145,12 +187,18 @@ class OrderAdapter:
         Returns:
             Dictionary mapping price string to list of orders
         """
-        from collections import defaultdict
+        try:
+            from collections import defaultdict
 
-        orders_by_price = defaultdict(list)
-        for order in self._connector.in_flight_orders.values():
-            orders_by_price[str(order.price)].append(order)
-        return dict(orders_by_price)
+            orders_by_price = defaultdict(list)
+            for order in self._connector.in_flight_orders.values():
+                orders_by_price[str(order.price)].append(order)
+            return dict(orders_by_price)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_orders_by_price: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_buy_orders(self) -> List[InFlightOrder]:
         """
@@ -159,11 +207,17 @@ class OrderAdapter:
         Returns:
             List of buy orders sorted by price (descending)
         """
-        orders = [
-            o for o in self._connector.in_flight_orders.values()
-            if o.trade_type == TradeType.BUY
-        ]
-        return sorted(orders, key=lambda x: x.price, reverse=True)
+        try:
+            orders = [
+                o for o in self._connector.in_flight_orders.values()
+                if o.trade_type == TradeType.BUY
+            ]
+            return sorted(orders, key=lambda x: x.price, reverse=True)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_buy_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_sell_orders(self) -> List[InFlightOrder]:
         """
@@ -172,11 +226,17 @@ class OrderAdapter:
         Returns:
             List of sell orders sorted by price (ascending)
         """
-        orders = [
-            o for o in self._connector.in_flight_orders.values()
-            if o.trade_type == TradeType.SELL
-        ]
-        return sorted(orders, key=lambda x: x.price)
+        try:
+            orders = [
+                o for o in self._connector.in_flight_orders.values()
+                if o.trade_type == TradeType.SELL
+            ]
+            return sorted(orders, key=lambda x: x.price)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_sell_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     def organize_orders(
         self,
@@ -197,21 +257,27 @@ class OrderAdapter:
         asks = []
         out_of_range = []
 
-        for order in self._connector.in_flight_orders.values():
-            if order.trade_type == TradeType.BUY:
-                if order.price > static_support:
-                    bids.append(order)
-                else:
-                    out_of_range.append(order)
-            else:  # SELL
-                if order.price < static_resistance:
-                    asks.append(order)
-                else:
-                    out_of_range.append(order)
+        try:
+            for order in self._connector.in_flight_orders.values():
+                if order.trade_type == TradeType.BUY:
+                    if order.price > static_support:
+                        bids.append(order)
+                    else:
+                        out_of_range.append(order)
+                else:  # SELL
+                    if order.price < static_resistance:
+                        asks.append(order)
+                    else:
+                        out_of_range.append(order)
 
-        # Sort bids descending (highest first), asks ascending (lowest first)
-        bids.sort(key=lambda x: x.price, reverse=True)
-        asks.sort(key=lambda x: x.price)
+            # Sort bids descending (highest first), asks ascending (lowest first)
+            bids.sort(key=lambda x: x.price, reverse=True)
+            asks.sort(key=lambda x: x.price)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in organize_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
         return bids, asks, out_of_range
 
@@ -232,15 +298,21 @@ class OrderAdapter:
         Returns:
             True if an order exists near the price
         """
-        if tick_size is None:
-            tick_size = Decimal("0.0001")  # Default fallback
+        try:
+            if tick_size is None:
+                tick_size = Decimal("0.0001")  # Default fallback
 
-        tolerance = tick_size * tolerance_ticks
+            tolerance = tick_size * tolerance_ticks
 
-        for order in self._connector.in_flight_orders.values():
-            if abs(order.price - price) <= tolerance:
-                return True
-        return False
+            for order in self._connector.in_flight_orders.values():
+                if abs(order.price - price) <= tolerance:
+                    return True
+            return False
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in has_order_at_price: {type(e).__name__}: {e}"
+            )
+            raise
 
     def count_active_orders(self) -> int:
         """
@@ -249,7 +321,13 @@ class OrderAdapter:
         Returns:
             The count of active orders
         """
-        return len(self._connector.in_flight_orders)
+        try:
+            return len(self._connector.in_flight_orders)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in count_active_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     def untrack_out_of_boundaries_orders(self, orders_to_untrack: list) -> None:
         """
@@ -261,8 +339,14 @@ class OrderAdapter:
         Args:
             orders_to_untrack: List of InFlightOrder objects to stop tracking
         """
-        for order in orders_to_untrack:
-            self._connector._order_tracker.stop_tracking_order(order.client_order_id)
+        try:
+            for order in orders_to_untrack:
+                self._connector._order_tracker.stop_tracking_order(order.client_order_id)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in untrack_out_of_boundaries_orders: {type(e).__name__}: {e}"
+            )
+            raise
 
     async def sync_open_orders(self) -> None:
         """
@@ -274,7 +358,13 @@ class OrderAdapter:
         This fetches all open orders from the exchange and adds them to
         the in_flight_orders tracking.
         """
-        await self._connector.track_all_open_orders(self._trading_pair)
+        try:
+            await self._connector.track_all_open_orders(self._trading_pair)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in sync_open_orders (track_all_open_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
     async def get_organized_orders(
         self,
@@ -297,14 +387,32 @@ class OrderAdapter:
         Returns:
             Tuple of (bids, asks) - sorted lists of InFlightOrder
         """
-        # Step 1: Sync with exchange
-        await self.sync_open_orders()
+        try:
+            # Step 1: Sync with exchange
+            await self.sync_open_orders()
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_organized_orders (sync_open_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Step 2: Organize orders
-        bids, asks, out_of_range = self.organize_orders(static_support, static_resistance)
+        try:
+            # Step 2: Organize orders
+            bids, asks, out_of_range = self.organize_orders(static_support, static_resistance)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_organized_orders (organize_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
-        # Step 3: Untrack out-of-range orders
-        if out_of_range:
-            self.untrack_out_of_boundaries_orders(out_of_range)
+        try:
+            # Step 3: Untrack out-of-range orders
+            if out_of_range:
+                self.untrack_out_of_boundaries_orders(out_of_range)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_organized_orders (untrack_out_of_boundaries_orders): {type(e).__name__}: {e}"
+            )
+            raise
 
         return bids, asks

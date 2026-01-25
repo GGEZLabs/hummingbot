@@ -79,7 +79,13 @@ class MarketDataAdapter:
         Returns:
             The mid price as a Decimal
         """
-        return self._connector.get_mid_price(self._trading_pair)
+        try:
+            return self._connector.get_mid_price(self._trading_pair)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_mid_price: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_best_bid(self) -> Decimal:
         """
@@ -89,7 +95,13 @@ class MarketDataAdapter:
             The best bid price as a Decimal
 
         """
-        return self._connector.get_price(self._trading_pair, is_buy=False)
+        try:
+            return self._connector.get_price(self._trading_pair, is_buy=False)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_best_bid: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_best_ask(self) -> Decimal:
         """
@@ -98,7 +110,13 @@ class MarketDataAdapter:
         Returns:
             The best ask price as a Decimal
         """
-        return self._connector.get_price(self._trading_pair, is_buy=True)
+        try:
+            return self._connector.get_price(self._trading_pair, is_buy=True)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_best_ask: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_last_trade_price(self) -> Decimal:
         """
@@ -107,17 +125,23 @@ class MarketDataAdapter:
         Returns:
             The last trade price, or mid price if unavailable
         """
-        order_book = self._connector.get_order_book(self._trading_pair)
-        last_trade = Decimal(str(order_book.last_trade_price))
+        try:
+            order_book = self._connector.get_order_book(self._trading_pair)
+            last_trade = Decimal(str(order_book.last_trade_price))
 
-        # Validate last trade price is within the spread
-        best_bid = self.get_best_bid()
-        best_ask = self.get_best_ask()
+            # Validate last trade price is within the spread
+            best_bid = self.get_best_bid()
+            best_ask = self.get_best_ask()
 
-        if last_trade < best_bid or last_trade > best_ask:
-            return self.get_mid_price()
+            if last_trade < best_bid or last_trade > best_ask:
+                return self.get_mid_price()
 
-        return last_trade
+            return last_trade
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_last_trade_price: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_order_book_snapshot(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -126,9 +150,15 @@ class MarketDataAdapter:
         Returns:
             Tuple of (bids_df, asks_df)
         """
-        order_book = self._connector.get_order_book(self._trading_pair)
-        snapshot = order_book.snapshot
-        return snapshot[0], snapshot[1]  # bids, asks
+        try:
+            order_book = self._connector.get_order_book(self._trading_pair)
+            snapshot = order_book.snapshot
+            return snapshot[0], snapshot[1]  # bids, asks
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_order_book_snapshot: {type(e).__name__}: {e}"
+            )
+            raise
 
     @functools.cached_property
     def price_tick_size(self) -> Decimal:
@@ -140,9 +170,15 @@ class MarketDataAdapter:
         Returns:
             The price tick size as a Decimal
         """
-        return self._connector.get_order_price_quantum(
-            self._trading_pair, Decimal("0")
-        )
+        try:
+            return self._connector.get_order_price_quantum(
+                self._trading_pair, Decimal("0")
+            )
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in price_tick_size: {type(e).__name__}: {e}"
+            )
+            raise
 
     @functools.cached_property
     def amount_tick_size(self) -> Decimal:
@@ -154,9 +190,15 @@ class MarketDataAdapter:
         Returns:
             The amount tick size as a Decimal
         """
-        return self._connector.get_order_size_quantum(
-            self._trading_pair, Decimal("0")
-        )
+        try:
+            return self._connector.get_order_size_quantum(
+                self._trading_pair, Decimal("0")
+            )
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in amount_tick_size: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_price_tick_size(self) -> Decimal:
         """Get the price tick size (protocol method)."""
@@ -173,10 +215,16 @@ class MarketDataAdapter:
         Returns:
             The minimum notional size as a Decimal
         """
-        trading_rules = self._connector._trading_rules.get(self._trading_pair)
-        if trading_rules:
-            return trading_rules.min_notional_size
-        return Decimal("0")
+        try:
+            trading_rules = self._connector._trading_rules.get(self._trading_pair)
+            if trading_rules:
+                return trading_rules.min_notional_size
+            return Decimal("0")
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_min_notional_size: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_balance(self, asset: str) -> Decimal:
         """
@@ -188,7 +236,13 @@ class MarketDataAdapter:
         Returns:
             The total balance
         """
-        return Decimal(str(self._connector.get_balance(asset)))
+        try:
+            return Decimal(str(self._connector.get_balance(asset)))
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_balance for {asset}: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_available_balance(self, asset: str) -> Decimal:
         """
@@ -200,7 +254,13 @@ class MarketDataAdapter:
         Returns:
             The available balance
         """
-        return Decimal(str(self._connector.get_available_balance(asset)))
+        try:
+            return Decimal(str(self._connector.get_available_balance(asset)))
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_available_balance for {asset}: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_balance_df(self) -> pd.DataFrame:
         """
@@ -209,20 +269,26 @@ class MarketDataAdapter:
         Returns:
             DataFrame with columns: Exchange, Asset, Total Balance, Available Balance
         """
-        columns = ["Exchange", "Asset", "Total Balance", "Available Balance"]
-        data = []
+        try:
+            columns = ["Exchange", "Asset", "Total Balance", "Available Balance"]
+            data = []
 
-        for asset in [self._base, self._quote]:
-            data.append([
-                self._connector.display_name,
-                asset,
-                float(self.get_balance(asset)),
-                float(self.get_available_balance(asset)),
-            ])
+            for asset in [self._base, self._quote]:
+                data.append([
+                    self._connector.display_name,
+                    asset,
+                    float(self.get_balance(asset)),
+                    float(self.get_available_balance(asset)),
+                ])
 
-        df = pd.DataFrame(data=data, columns=columns)
-        df.sort_values(by=["Exchange", "Asset"], inplace=True)
-        return df
+            df = pd.DataFrame(data=data, columns=columns)
+            df.sort_values(by=["Exchange", "Asset"], inplace=True)
+            return df
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in get_balance_df: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_available_base_balance(self) -> Decimal:
         """Get available balance for the base asset."""
@@ -251,10 +317,16 @@ class MarketDataAdapter:
         """
         import math
 
-        if trade_type == TradeType.BUY:
-            quote_balance = self.get_available_quote_balance()
-            max_amount = quote_balance / order_price
-            return min(order_amount, Decimal(str(math.floor(float(max_amount)))))
-        else:
-            base_balance = self.get_available_base_balance()
-            return min(order_amount, base_balance)
+        try:
+            if trade_type == TradeType.BUY:
+                quote_balance = self.get_available_quote_balance()
+                max_amount = quote_balance / order_price
+                return min(order_amount, Decimal(str(math.floor(float(max_amount)))))
+            else:
+                base_balance = self.get_available_base_balance()
+                return min(order_amount, base_balance)
+        except Exception as e:
+            self._connector.logger().error(
+                f"Error in adjust_amount_for_balance: {type(e).__name__}: {e}"
+            )
+            raise

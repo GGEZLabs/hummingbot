@@ -5,9 +5,12 @@ This module contains pure mathematical functions with no side effects
 or dependencies on external state.
 """
 
+import logging
 import random
 from decimal import Decimal
 from typing import Union
+
+logger = logging.getLogger(__name__)
 
 # Type alias for numeric values
 Numeric = Union[Decimal, float, int]
@@ -29,9 +32,15 @@ def random_decimal(min_val: Numeric, max_val: Numeric) -> Decimal:
         >>> Decimal("1.0") <= result <= Decimal("2.0")
         True
     """
-    min_float = float(min_val)
-    max_float = float(max_val)
-    return Decimal(str(random.uniform(min_float, max_float)))
+    try:
+        min_float = float(min_val)
+        max_float = float(max_val)
+        return Decimal(str(random.uniform(min_float, max_float)))
+    except Exception as e:
+        logger.error(
+            f"Error in random_decimal(min_val={min_val}, max_val={max_val}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def random_int(min_val: int, max_val: int) -> int:
@@ -45,7 +54,13 @@ def random_int(min_val: int, max_val: int) -> int:
     Returns:
         A random integer in the range [min_val, max_val]
     """
-    return random.randint(min_val, max_val)
+    try:
+        return random.randint(min_val, max_val)
+    except Exception as e:
+        logger.error(
+            f"Error in random_int(min_val={min_val}, max_val={max_val}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def random_float(min_val: float, max_val: float) -> float:
@@ -59,7 +74,13 @@ def random_float(min_val: float, max_val: float) -> float:
     Returns:
         A random float in the range [min_val, max_val]
     """
-    return random.uniform(min_val, max_val)
+    try:
+        return random.uniform(min_val, max_val)
+    except Exception as e:
+        logger.error(
+            f"Error in random_float(min_val={min_val}, max_val={max_val}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def percent_distance_from_bid(
@@ -90,17 +111,23 @@ def percent_distance_from_bid(
         >>> percent_distance_from_bid(110, 100, 105)
         Decimal('50')  # At the mid
     """
-    ask_dec = Decimal(str(ask))
-    bid_dec = Decimal(str(bid))
-    price_dec = Decimal(str(price))
+    try:
+        ask_dec = Decimal(str(ask))
+        bid_dec = Decimal(str(bid))
+        price_dec = Decimal(str(price))
 
-    price_range = ask_dec - bid_dec
+        price_range = ask_dec - bid_dec
 
-    if price_range == 0:
-        return Decimal("0")
+        if price_range == 0:
+            return Decimal("0")
 
-    distance_from_bid = (price_dec - bid_dec) / price_range
-    return distance_from_bid * Decimal("100")
+        distance_from_bid = (price_dec - bid_dec) / price_range
+        return distance_from_bid * Decimal("100")
+    except Exception as e:
+        logger.error(
+            f"Error in percent_distance_from_bid(ask={ask}, bid={bid}, price={price}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def rescale_value(
@@ -131,19 +158,25 @@ def rescale_value(
         >>> rescale_value(75, 0, 100, 0, 10)
         Decimal('7.5')
     """
-    value_dec = Decimal(str(value))
-    from_min_dec = Decimal(str(from_min))
-    from_max_dec = Decimal(str(from_max))
-    to_min_dec = Decimal(str(to_min))
-    to_max_dec = Decimal(str(to_max))
+    try:
+        value_dec = Decimal(str(value))
+        from_min_dec = Decimal(str(from_min))
+        from_max_dec = Decimal(str(from_max))
+        to_min_dec = Decimal(str(to_min))
+        to_max_dec = Decimal(str(to_max))
 
-    from_range = from_max_dec - from_min_dec
+        from_range = from_max_dec - from_min_dec
 
-    if from_range == 0:
-        return to_min_dec
+        if from_range == 0:
+            return to_min_dec
 
-    normalized = (value_dec - from_min_dec) / from_range
-    return to_min_dec + normalized * (to_max_dec - to_min_dec)
+        normalized = (value_dec - from_min_dec) / from_range
+        return to_min_dec + normalized * (to_max_dec - to_min_dec)
+    except Exception as e:
+        logger.error(
+            f"Error in rescale_value(value={value}, from_min={from_min}, from_max={from_max}, to_min={to_min}, to_max={to_max}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def geometric_amount(
@@ -178,30 +211,36 @@ def geometric_amount(
         >>> geometric_amount(2, 3, Decimal("100"), 2.0)
         Decimal('57.142...')  # Largest amount at position 2
     """
-    if common_ratio <= 1.0:
-        raise ValueError("Common ratio must be > 1.0")
+    try:
+        if common_ratio <= 1.0:
+            raise ValueError("Common ratio must be > 1.0")
 
-    if position < 0 or position >= total_levels:
-        raise ValueError(f"Position {position} out of range [0, {total_levels})")
+        if position < 0 or position >= total_levels:
+            raise ValueError(f"Position {position} out of range [0, {total_levels})")
 
-    if total_levels <= 0:
-        raise ValueError("Total levels must be > 0")
+        if total_levels <= 0:
+            raise ValueError("Total levels must be > 0")
 
-    total_dec = Decimal(str(total_balance))
+        total_dec = Decimal(str(total_balance))
 
-    if total_dec <= 0:
-        return Decimal("0")
+        if total_dec <= 0:
+            return Decimal("0")
 
-    r = common_ratio
-    n = total_levels
+        r = common_ratio
+        n = total_levels
 
-    # base_amount = total * (r - 1) / (r^n - 1)
-    base_amount = float(total_dec) * (r - 1) / (r**n - 1)
+        # base_amount = total * (r - 1) / (r^n - 1)
+        base_amount = float(total_dec) * (r - 1) / (r**n - 1)
 
-    # amount at position = base * r^position
-    amount = base_amount * (r**position)
+        # amount at position = base * r^position
+        amount = base_amount * (r**position)
 
-    return Decimal(str(amount))
+        return Decimal(str(amount))
+    except Exception as e:
+        logger.error(
+            f"Error in geometric_amount(position={position}, total_levels={total_levels}, total_balance={total_balance}, common_ratio={common_ratio}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def cube(value: Numeric) -> Decimal:
@@ -214,8 +253,14 @@ def cube(value: Numeric) -> Decimal:
     Returns:
         value^3 as a Decimal
     """
-    value_dec = Decimal(str(value))
-    return value_dec**3
+    try:
+        value_dec = Decimal(str(value))
+        return value_dec**3
+    except Exception as e:
+        logger.error(
+            f"Error in cube(value={value}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_weighted_random_choice(
@@ -236,9 +281,15 @@ def calculate_weighted_random_choice(
         >>> choice in weights
         True
     """
-    population = list(weights.keys())
-    weight_values = [float(weights[k]) for k in population]
-    return random.choices(population=population, weights=weight_values, k=1)[0]
+    try:
+        population = list(weights.keys())
+        weight_values = [float(weights[k]) for k in population]
+        return random.choices(population=population, weights=weight_values, k=1)[0]
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_weighted_random_choice(weights={weights}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_movement_probabilities(bid_distance: Numeric) -> dict:
@@ -264,26 +315,32 @@ def calculate_movement_probabilities(bid_distance: Numeric) -> dict:
         >>> probs["downwards"] > probs["upwards"]  # At resistance, favor down
         True
     """
-    bd = float(bid_distance)
+    try:
+        bd = float(bid_distance)
 
-    if bd <= 50:
-        # Interpolate between support (0: 50,0,50) and mid (50: 30,30,40)
-        t = bd / 50
-        upward = 50 - (20 * t)
-        downward = 0 + (30 * t)
-        sideways = 50 - (10 * t)
-    else:
-        # Interpolate between mid (50: 30,30,40) and resistance (100: 0,50,50)
-        t = (bd - 50) / 50
-        upward = 30 - (30 * t)
-        downward = 30 + (20 * t)
-        sideways = 40 + (10 * t)
+        if bd <= 50:
+            # Interpolate between support (0: 50,0,50) and mid (50: 30,30,40)
+            t = bd / 50
+            upward = 50 - (20 * t)
+            downward = 0 + (30 * t)
+            sideways = 50 - (10 * t)
+        else:
+            # Interpolate between mid (50: 30,30,40) and resistance (100: 0,50,50)
+            t = (bd - 50) / 50
+            upward = 30 - (30 * t)
+            downward = 30 + (20 * t)
+            sideways = 40 + (10 * t)
 
-    return {
-        "upwards": round(upward, 2),
-        "downwards": round(downward, 2),
-        "sideways": round(sideways, 2),
-    }
+        return {
+            "upwards": round(upward, 2),
+            "downwards": round(downward, 2),
+            "sideways": round(sideways, 2),
+        }
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_movement_probabilities(bid_distance={bid_distance}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def calculate_drift_per_interval(
@@ -304,19 +361,25 @@ def calculate_drift_per_interval(
     Returns:
         Price drift per interval
     """
-    if total_time <= 0 or update_interval <= 0:
-        return Decimal("0")
+    try:
+        if total_time <= 0 or update_interval <= 0:
+            return Decimal("0")
 
-    start_dec = Decimal(str(start_price))
-    end_dec = Decimal(str(end_price))
+        start_dec = Decimal(str(start_price))
+        end_dec = Decimal(str(end_price))
 
-    price_diff = end_dec - start_dec
-    num_intervals = Decimal(str(total_time / update_interval))
+        price_diff = end_dec - start_dec
+        num_intervals = Decimal(str(total_time / update_interval))
 
-    if num_intervals == 0:
-        return Decimal("0")
+        if num_intervals == 0:
+            return Decimal("0")
 
-    return price_diff / num_intervals
+        return price_diff / num_intervals
+    except Exception as e:
+        logger.error(
+            f"Error in calculate_drift_per_interval(start_price={start_price}, end_price={end_price}, total_time={total_time}, update_interval={update_interval}): {type(e).__name__}: {e}"
+        )
+        raise
 
 
 def min_update_interval_for_tick(
@@ -337,13 +400,19 @@ def min_update_interval_for_tick(
     Returns:
         Minimum update interval in seconds
     """
-    price_diff = abs(Decimal(str(end_price)) - Decimal(str(start_price)))
+    try:
+        price_diff = abs(Decimal(str(end_price)) - Decimal(str(start_price)))
 
-    if price_diff == 0:
-        return 0
+        if price_diff == 0:
+            return 0
 
-    tick_dec = Decimal(str(tick_size))
-    time_dec = Decimal(str(total_time))
+        tick_dec = Decimal(str(tick_size))
+        time_dec = Decimal(str(total_time))
 
-    # interval = time * tick_size / price_diff
-    return float((time_dec * tick_dec) / price_diff)
+        # interval = time * tick_size / price_diff
+        return float((time_dec * tick_dec) / price_diff)
+    except Exception as e:
+        logger.error(
+            f"Error in min_update_interval_for_tick(start_price={start_price}, end_price={end_price}, total_time={total_time}, tick_size={tick_size}): {type(e).__name__}: {e}"
+        )
+        raise

@@ -4,9 +4,12 @@ Report service for the Volume Pumper strategy.
 This service handles trading statistics tracking and report generation.
 """
 
+import logging
 import time
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 
 class ReportService:
@@ -92,27 +95,45 @@ class ReportService:
             amount: Trade amount in base currency
             price: Trade price
         """
-        volume_quote = amount * price
+        try:
+            volume_quote = amount * price
 
-        # Update totals
-        self._total_volume_quote += volume_quote
-        self._total_volume_base += amount
-        self._total_trades_count += 1
+            # Update totals
+            self._total_volume_quote += volume_quote
+            self._total_volume_base += amount
+            self._total_trades_count += 1
 
-        # Update interval
-        self._interval_volume_quote += volume_quote
-        self._interval_volume_base += amount
-        self._interval_trades_count += 1
+            # Update interval
+            self._interval_volume_quote += volume_quote
+            self._interval_volume_base += amount
+            self._interval_trades_count += 1
+        except Exception as e:
+            logger.error(
+                f"Error in track_trade: {type(e).__name__}: {e}"
+            )
+            raise
 
     def track_tight_spread(self) -> None:
         """Record a tight spread occurrence."""
-        self._total_tight_spread_count += 1
-        self._interval_tight_spread_count += 1
+        try:
+            self._total_tight_spread_count += 1
+            self._interval_tight_spread_count += 1
+        except Exception as e:
+            logger.error(
+                f"Error in track_tight_spread: {type(e).__name__}: {e}"
+            )
+            raise
 
     def track_out_of_spread(self) -> None:
         """Record an out-of-spread occurrence."""
-        self._total_out_of_spread_count += 1
-        self._interval_out_of_spread_count += 1
+        try:
+            self._total_out_of_spread_count += 1
+            self._interval_out_of_spread_count += 1
+        except Exception as e:
+            logger.error(
+                f"Error in track_out_of_spread: {type(e).__name__}: {e}"
+            )
+            raise
 
     def is_report_due(self) -> bool:
         """
@@ -121,11 +142,17 @@ class ReportService:
         Returns:
             True if report should be generated
         """
-        if self._report_interval_hours <= 0:
-            return False
+        try:
+            if self._report_interval_hours <= 0:
+                return False
 
-        elapsed = time.time() - self._last_report_timestamp
-        return elapsed >= self._report_frequency_seconds
+            elapsed = time.time() - self._last_report_timestamp
+            return elapsed >= self._report_frequency_seconds
+        except Exception as e:
+            logger.error(
+                f"Error in is_report_due: {type(e).__name__}: {e}"
+            )
+            raise
 
     def generate_summary(self) -> str:
         """
@@ -134,15 +161,21 @@ class ReportService:
         Returns:
             Formatted summary report string
         """
-        return self._generate_report(
-            report_type="Summary Report",
-            volume_quote=self._total_volume_quote,
-            volume_base=self._total_volume_base,
-            trades_count=self._total_trades_count,
-            tight_spread_count=self._total_tight_spread_count,
-            out_of_spread_count=self._total_out_of_spread_count,
-            include_interval_note=False,
-        )
+        try:
+            return self._generate_report(
+                report_type="Summary Report",
+                volume_quote=self._total_volume_quote,
+                volume_base=self._total_volume_base,
+                trades_count=self._total_trades_count,
+                tight_spread_count=self._total_tight_spread_count,
+                out_of_spread_count=self._total_out_of_spread_count,
+                include_interval_note=False,
+            )
+        except Exception as e:
+            logger.error(
+                f"Error in generate_summary: {type(e).__name__}: {e}"
+            )
+            raise
 
     def generate_periodic_report(self) -> str:
         """
@@ -151,21 +184,27 @@ class ReportService:
         Returns:
             Formatted periodic report string
         """
-        report = self._generate_report(
-            report_type="Periodic Summary Report",
-            volume_quote=self._interval_volume_quote,
-            volume_base=self._interval_volume_base,
-            trades_count=self._interval_trades_count,
-            tight_spread_count=self._interval_tight_spread_count,
-            out_of_spread_count=self._interval_out_of_spread_count,
-            include_interval_note=True,
-        )
+        try:
+            report = self._generate_report(
+                report_type="Periodic Summary Report",
+                volume_quote=self._interval_volume_quote,
+                volume_base=self._interval_volume_base,
+                trades_count=self._interval_trades_count,
+                tight_spread_count=self._interval_tight_spread_count,
+                out_of_spread_count=self._interval_out_of_spread_count,
+                include_interval_note=True,
+            )
 
-        # Reset interval counters
-        self._reset_interval_data()
-        self._last_report_timestamp = time.time()
+            # Reset interval counters
+            self._reset_interval_data()
+            self._last_report_timestamp = time.time()
 
-        return report
+            return report
+        except Exception as e:
+            logger.error(
+                f"Error in generate_periodic_report: {type(e).__name__}: {e}"
+            )
+            raise
 
     def _generate_report(
         self,
@@ -192,30 +231,42 @@ class ReportService:
         Returns:
             Formatted report string
         """
-        running_time = self._format_duration(datetime.now() - self._starting_time)
+        try:
+            running_time = self._format_duration(datetime.now() - self._starting_time)
 
-        interval_note = ""
-        if include_interval_note:
-            interval_note = f"\nThis Report Covers The Last {self._report_interval_hours} hour(s)"
+            interval_note = ""
+            if include_interval_note:
+                interval_note = f"\nThis Report Covers The Last {self._report_interval_hours} hour(s)"
 
-        return (
-            f"\n{report_type}:"
-            f"{interval_note}"
-            f"\nTotal Traded Volume In Quote: {volume_quote:.4f} {self._quote}"
-            f"\nTotal Traded Volume In Base: {volume_base:.4f} {self._base}"
-            f"\nTotal Trades Count: {trades_count}"
-            f"\nTotal Tight Spread Error Count: {tight_spread_count}"
-            f"\nTotal Out Of Spread Error Count: {out_of_spread_count}"
-            f"\nTotal Running Time: {running_time}"
-        )
+            return (
+                f"\n{report_type}:"
+                f"{interval_note}"
+                f"\nTotal Traded Volume In Quote: {volume_quote:.4f} {self._quote}"
+                f"\nTotal Traded Volume In Base: {volume_base:.4f} {self._base}"
+                f"\nTotal Trades Count: {trades_count}"
+                f"\nTotal Tight Spread Error Count: {tight_spread_count}"
+                f"\nTotal Out Of Spread Error Count: {out_of_spread_count}"
+                f"\nTotal Running Time: {running_time}"
+            )
+        except Exception as e:
+            logger.error(
+                f"Error in _generate_report: {type(e).__name__}: {e}"
+            )
+            raise
 
     def _reset_interval_data(self) -> None:
         """Reset interval statistics to zero."""
-        self._interval_volume_quote = Decimal("0")
-        self._interval_volume_base = Decimal("0")
-        self._interval_trades_count = 0
-        self._interval_tight_spread_count = 0
-        self._interval_out_of_spread_count = 0
+        try:
+            self._interval_volume_quote = Decimal("0")
+            self._interval_volume_base = Decimal("0")
+            self._interval_trades_count = 0
+            self._interval_tight_spread_count = 0
+            self._interval_out_of_spread_count = 0
+        except Exception as e:
+            logger.error(
+                f"Error in _reset_interval_data: {type(e).__name__}: {e}"
+            )
+            raise
 
     @staticmethod
     def _format_duration(delta: timedelta) -> str:
@@ -228,10 +279,16 @@ class ReportService:
         Returns:
             Formatted string like "1 day(s), 2 hour(s), 3 minute(s)"
         """
-        days, seconds = delta.days, delta.seconds
-        hours, remainder = divmod(seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{days} day(s), {hours} hour(s), {minutes} minute(s), and {seconds} second(s)"
+        try:
+            days, seconds = delta.days, delta.seconds
+            hours, remainder = divmod(seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            return f"{days} day(s), {hours} hour(s), {minutes} minute(s), and {seconds} second(s)"
+        except Exception as e:
+            logger.error(
+                f"Error in _format_duration: {type(e).__name__}: {e}"
+            )
+            raise
 
     def get_stats_dict(self) -> dict:
         """
@@ -240,14 +297,20 @@ class ReportService:
         Returns:
             Dictionary with all statistics
         """
-        return {
-            "total_volume_quote": float(self._total_volume_quote),
-            "total_volume_base": float(self._total_volume_base),
-            "total_trades": self._total_trades_count,
-            "total_tight_spread": self._total_tight_spread_count,
-            "total_out_of_spread": self._total_out_of_spread_count,
-            "interval_volume_quote": float(self._interval_volume_quote),
-            "interval_volume_base": float(self._interval_volume_base),
-            "interval_trades": self._interval_trades_count,
-            "running_since": self._starting_time.isoformat(),
-        }
+        try:
+            return {
+                "total_volume_quote": float(self._total_volume_quote),
+                "total_volume_base": float(self._total_volume_base),
+                "total_trades": self._total_trades_count,
+                "total_tight_spread": self._total_tight_spread_count,
+                "total_out_of_spread": self._total_out_of_spread_count,
+                "interval_volume_quote": float(self._interval_volume_quote),
+                "interval_volume_base": float(self._interval_volume_base),
+                "interval_trades": self._interval_trades_count,
+                "running_since": self._starting_time.isoformat(),
+            }
+        except Exception as e:
+            logger.error(
+                f"Error in get_stats_dict: {type(e).__name__}: {e}"
+            )
+            raise
