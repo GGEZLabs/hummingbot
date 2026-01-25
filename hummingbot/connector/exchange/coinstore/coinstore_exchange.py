@@ -439,7 +439,6 @@ class CoinstoreExchange(ExchangePyBase):
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
         open_orders = await self._get_unfilled_or_partially_filled_response(
             market=self.get_exchange_trading_pair(tracked_order.trading_pair),
-
         )
         if not open_orders["data"]:
             return OrderUpdate(
@@ -584,29 +583,33 @@ class CoinstoreExchange(ExchangePyBase):
             "ordType": "LIMIT"
         },]
         """
-        open_orders = await self._get_unfilled_or_partially_filled_response(
-            market=self.get_exchange_trading_pair(market),
-        )
-        if not open_orders["data"]:
-            return
-        for order in open_orders["data"]:
-            if any([str(ifo.exchange_order_id) == str(order["ordId"]) for ifo in self.in_flight_orders.values()]):
-                continue
-            self.logger().info("Tracking order", order["ordId"])
-
-            client_order_id = order["clOrdId"]
-            if client_order_id == "":
-                client_order_id = order["ordId"]
-
-            in_flight_order = InFlightOrder(
-                amount=Decimal(order["ordQty"]),
-                client_order_id=str(client_order_id),
-                creation_timestamp=float(order["timestamp"]),
-                exchange_order_id=str(order["ordId"]),
-                price=Decimal(order["ordPrice"]),
-                trading_pair=market,
-                trade_type=TradeType.BUY if order["side"] == CONSTANTS.TAKER_SIDE_BUY else TradeType.SELL,
-                order_type=OrderType.LIMIT,
-                initial_state=CONSTANTS.ORDER_STATE[order["ordStatus"]],
+        try:
+            open_orders = await self._get_unfilled_or_partially_filled_response(
+                market=self.get_exchange_trading_pair(market),
             )
-            self._order_tracker.start_tracking_order(in_flight_order)
+            if not open_orders["data"]:
+                return
+            for order in open_orders["data"]:
+                if any([str(ifo.exchange_order_id) == str(order["ordId"]) for ifo in self.in_flight_orders.values()]):
+                    continue
+                client_order_id = order["clOrdId"]
+                if client_order_id == "":
+                    client_order_id = order["ordId"]
+
+                in_flight_order = InFlightOrder(
+                    amount=Decimal(order["ordQty"]),
+                    client_order_id=str(client_order_id),
+                    creation_timestamp=float(order["timestamp"]),
+                    exchange_order_id=str(order["ordId"]),
+                    price=Decimal(order["ordPrice"]),
+                    trading_pair=market,
+                    trade_type=TradeType.BUY if order["side"] == CONSTANTS.TAKER_SIDE_BUY else TradeType.SELL,
+                    order_type=OrderType.LIMIT,
+                    initial_state=CONSTANTS.ORDER_STATE[order["ordStatus"]],
+                )
+                self._order_tracker.start_tracking_order(in_flight_order)
+        except Exception as e:
+            self.logger().error(
+                f"Error in track_all_open_orders (processing order {order.get('order_id', 'unknown')}): {type(e).__name__}: {e}"
+            )
+            raise
