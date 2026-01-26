@@ -23,7 +23,7 @@ from hummingbot.connector.trading_rule import TradingRule
 from hummingbot.connector.utils import combine_to_hb_trading_pair
 from hummingbot.core.data_type.cancellation_result import CancellationResult
 from hummingbot.core.data_type.common import OrderType, TradeType
-from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderUpdate, TradeUpdate
+from hummingbot.core.data_type.in_flight_order import InFlightOrder, OrderState, OrderUpdate, TradeUpdate
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.trade_fee import DeductedFromReturnsTradeFee, TokenAmount, TradeFeeBase
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
@@ -55,6 +55,13 @@ class CoinstoreExchange(ExchangePyBase):
         self._trading_pairs = trading_pairs
         self._last_trades_poll_coinstore_timestamp = 1.0
         self._unfilled_or_partially_filled_responses_cache = {}
+        # Cache for order info responses to avoid rate limit issues
+        self._order_info_cache: Dict[str, Dict[str, Any]] = {}
+        self._order_info_cache_time = float(CONSTANTS.ORDER_INFO_CACHE_TIME)
+        # Track processed trade fill amounts to avoid duplicate trade updates
+        self._processed_trade_fills: Dict[str, Decimal] = {}
+        # Last time we cleaned up caches
+        self._last_cache_cleanup_timestamp = 0.0
         super().__init__(client_config_map)
 
     @staticmethod
@@ -379,21 +386,142 @@ class CoinstoreExchange(ExchangePyBase):
                 self.logger().error("Unexpected error in user stream listener loop.", exc_info=True)
                 await self._sleep(5.0)
 
+    def _cleanup_caches(self):
+        """
+        Clean up old entries from caches to prevent memory leaks.
+        Called periodically (every 60 seconds).
+        """
+        cleanup_interval = 60.0
+        if self.current_timestamp - self._last_cache_cleanup_timestamp < cleanup_interval:
+            return
+
+        self._last_cache_cleanup_timestamp = self.current_timestamp
+        current_time = self.current_timestamp
+
+        # Clean up order info cache (entries older than cache time)
+        expired_order_info_keys = [
+            key for key, value in self._order_info_cache.items()
+            if current_time - value["timestamp"] > self._order_info_cache_time * 2
+        ]
+        for key in expired_order_info_keys:
+            del self._order_info_cache[key]
+
+        # Clean up unfilled orders cache
+        expired_unfilled_keys = [
+            key for key, value in self._unfilled_or_partially_filled_responses_cache.items()
+            if current_time - value["timestamp"] > CONSTANTS.OPEN_ORDERS_CACHE_TIME * 2
+        ]
+        for key in expired_unfilled_keys:
+            del self._unfilled_or_partially_filled_responses_cache[key]
+
+        # Clean up processed trade fills for orders no longer being tracked
+        active_order_ids = set(
+            str(order.exchange_order_id)
+            for order in self._order_tracker.all_fillable_orders.values()
+            if order.exchange_order_id is not None
+        )
+        stale_fill_keys = [
+            key for key in self._processed_trade_fills.keys()
+            if key not in active_order_ids
+        ]
+        for key in stale_fill_keys:
+            del self._processed_trade_fills[key]
+
+    async def _get_order_info_cached(self, exchange_order_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get order info with caching to avoid rate limit issues.
+        Cache responses for 5 seconds to reduce API calls.
+        """
+        # Periodic cleanup
+        self._cleanup_caches()
+
+        cache_key = str(exchange_order_id)
+        cached = self._order_info_cache.get(cache_key)
+
+        if cached is not None:
+            if cached["timestamp"] > self.current_timestamp - self._order_info_cache_time:
+                return cached.get("response")
+
+        try:
+            updated_order_response = await self._api_get(
+                path_url=CONSTANTS.ORDER_INFO_PATH_URL,
+                params={"ordId": exchange_order_id},
+                is_auth_required=True,
+            )
+            if updated_order_response["code"] == CONSTANTS.ORDER_NOT_EXIST_ERROR_CODE:
+                return None
+
+            self._order_info_cache[cache_key] = {
+                "response": updated_order_response,
+                "timestamp": self.current_timestamp,
+            }
+            return updated_order_response
+        except Exception as e:
+            self.logger().debug(f"Error fetching order info for {exchange_order_id}: {e}")
+            return None
+
     async def _all_trade_updates_for_order(self, order: InFlightOrder) -> List[TradeUpdate]:
         trade_updates = []
         try:
-            if order.exchange_order_id is not None:
-                exchange_order_id = int(order.exchange_order_id)
-                trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=order.trading_pair)
-                updated_order_response = await self._api_get(
-                    path_url=CONSTANTS.ORDER_INFO_PATH_URL,
-                    params={"ordId": exchange_order_id},
-                    is_auth_required=True,
-                )
-                if updated_order_response["code"] == CONSTANTS.ORDER_NOT_EXIST_ERROR_CODE:
+            if order.exchange_order_id is None:
+                return trade_updates
+
+            exchange_order_id_str = str(order.exchange_order_id)
+            trading_pair = await self.exchange_symbol_associated_to_pair(trading_pair=order.trading_pair)
+
+            # Step 1: Check the open orders endpoint first (cached, 1 API call per trading pair).
+            # This avoids calling the expensive orderInfo endpoint for orders
+            # that are still active with no fills (e.g. paywall orders).
+            market = self.get_exchange_trading_pair(order.trading_pair)
+            open_orders_response = await self._get_unfilled_or_partially_filled_response(market)
+            open_orders_data = open_orders_response.get("data", []) or []
+
+            found_in_open_orders = False
+            open_order_cum_qty = Decimal("0")
+            open_order_cum_amt = Decimal("0")
+            open_order_price = Decimal("0")
+            open_order_timestamp = self.current_timestamp
+
+            for open_order in open_orders_data:
+                if str(open_order["ordId"]) == exchange_order_id_str:
+                    found_in_open_orders = True
+                    open_order_cum_qty = Decimal(open_order.get("cumQty", "0"))
+                    open_order_cum_amt = Decimal(open_order.get("cumAmt", "0"))
+                    open_order_price = Decimal(open_order.get("ordPrice", "0"))
+                    open_order_timestamp = open_order.get("timestamp", self.current_timestamp * 1e3) * 1e-3
+                    break
+
+            if found_in_open_orders:
+                if open_order_cum_qty <= Decimal("0"):
+                    # Order is still open with no fills - skip orderInfo call entirely
                     return trade_updates
+
+                # Partially filled: use the open order data directly (no orderInfo call needed)
+                cumulative_fill_qty = open_order_cum_qty
+                cumulative_fill_amt = open_order_cum_amt
+                fill_price = (cumulative_fill_amt / cumulative_fill_qty) if cumulative_fill_qty > 0 else open_order_price
+                fill_timestamp = open_order_timestamp
+            else:
+                # Order not in open orders (filled or canceled) - need orderInfo
+                updated_order_response = await self._get_order_info_cached(int(order.exchange_order_id))
+                if updated_order_response is None:
+                    return trade_updates
+
                 updated_order_data = updated_order_response["data"]
-                exchange_order_id = str(updated_order_data["ordId"])
+                cumulative_fill_qty = Decimal(updated_order_data["cumQty"])
+                cumulative_fill_amt = Decimal(updated_order_data["cumAmt"])
+                fill_price = Decimal(updated_order_data["avgPrice"])
+                fill_timestamp = updated_order_data["orderUpdateTime"] * 1e-3
+
+            # Step 2: Check if this fill amount was already processed to avoid duplicates
+            prev_fill_qty = self._processed_trade_fills.get(exchange_order_id_str, Decimal("0"))
+            if cumulative_fill_qty <= prev_fill_qty:
+                return trade_updates
+
+            # Calculate the incremental fill (new amount - previously processed)
+            incremental_fill_qty = cumulative_fill_qty - prev_fill_qty
+
+            if incremental_fill_qty > Decimal("0"):
                 fee = TradeFeeBase.new_spot_fee(
                     fee_schema=self.trade_fee_schema(),
                     trade_type=order.trade_type,
@@ -401,21 +529,32 @@ class CoinstoreExchange(ExchangePyBase):
                     percent_token="0",
                     flat_fees=[TokenAmount(amount=Decimal("0"), token=order.base_asset)],
                 )
-                price = Decimal(updated_order_data["avgPrice"])
+
+                # Calculate incremental quote amount proportionally
+                if cumulative_fill_qty > Decimal("0"):
+                    incremental_fill_amt = (incremental_fill_qty / cumulative_fill_qty) * cumulative_fill_amt
+                else:
+                    incremental_fill_amt = Decimal("0")
+
+                # Use a unique trade_id that includes the cumulative quantity
+                trade_id = f"{exchange_order_id_str}_{cumulative_fill_qty}"
+
                 trade_update = TradeUpdate(
-                    trade_id=str(updated_order_data["ordId"]),
+                    trade_id=trade_id,
                     client_order_id=order.client_order_id,
-                    exchange_order_id=exchange_order_id,
+                    exchange_order_id=exchange_order_id_str,
                     trading_pair=trading_pair,
                     fee=fee,
-                    fill_base_amount=Decimal(updated_order_data["cumQty"]),
-                    fill_quote_amount=Decimal(updated_order_data["cumAmt"]),
-                    fill_price=price,
-                    fill_timestamp=updated_order_data["orderUpdateTime"] * 1e-3,
+                    fill_base_amount=incremental_fill_qty,
+                    fill_quote_amount=incremental_fill_amt,
+                    fill_price=fill_price,
+                    fill_timestamp=fill_timestamp,
                 )
                 trade_updates.append(trade_update)
+                self._processed_trade_fills[exchange_order_id_str] = cumulative_fill_qty
+
         except Exception as e:
-            print(e)
+            self.logger().debug(f"Error in _all_trade_updates_for_order: {e}")
         return trade_updates
 
     async def _get_unfilled_or_partially_filled_response(self, market: str):
@@ -436,40 +575,55 @@ class CoinstoreExchange(ExchangePyBase):
         }
         return unfilled_or_partially_filled_response
 
+    async def _get_order_status_from_order_info(self, tracked_order: InFlightOrder) -> OrderUpdate:
+        """
+        When an order is not found in open orders, check the orderInfo endpoint
+        to determine if it was FILLED vs CANCELED.
+        """
+        if tracked_order.exchange_order_id is not None:
+            order_info = await self._get_order_info_cached(int(tracked_order.exchange_order_id))
+            if order_info is not None:
+                order_data = order_info["data"]
+                order_status = order_data.get("ordStatus", "CANCELED")
+                new_state = CONSTANTS.ORDER_STATE.get(order_status, OrderState.CANCELED)
+                return OrderUpdate(
+                    exchange_order_id=tracked_order.exchange_order_id,
+                    new_state=new_state,
+                    trading_pair=tracked_order.trading_pair,
+                    client_order_id=tracked_order.client_order_id,
+                    update_timestamp=order_data.get("orderUpdateTime", self.current_timestamp * 1e3) * 1e-3,
+                )
+
+        # Fallback: if we can't reach orderInfo, default to CANCELED
+        return OrderUpdate(
+            exchange_order_id=tracked_order.exchange_order_id,
+            new_state=CONSTANTS.ORDER_STATE["CANCELED"],
+            trading_pair=tracked_order.trading_pair,
+            client_order_id=tracked_order.client_order_id,
+            update_timestamp=self.current_timestamp,
+        )
+
     async def _request_order_status(self, tracked_order: InFlightOrder) -> OrderUpdate:
         open_orders = await self._get_unfilled_or_partially_filled_response(
             market=self.get_exchange_trading_pair(tracked_order.trading_pair),
         )
         if not open_orders["data"]:
-            return OrderUpdate(
-                exchange_order_id=tracked_order.exchange_order_id,
-                new_state=CONSTANTS.ORDER_STATE["CANCELED"],
-                trading_pair=tracked_order.trading_pair,
-                client_order_id=tracked_order.client_order_id,
-                update_timestamp=self.current_timestamp,
-            )
-        order_update = None
-        for order in open_orders["data"]:
-            if order["ordId"] == tracked_order.exchange_order_id:
-                new_state = CONSTANTS.ORDER_STATE[order["ordStatus"]]
+            # Order not in open orders - check if it was FILLED or actually CANCELED
+            return await self._get_order_status_from_order_info(tracked_order)
 
-                order_update = OrderUpdate(
+        for order in open_orders["data"]:
+            if str(order["ordId"]) == str(tracked_order.exchange_order_id):
+                new_state = CONSTANTS.ORDER_STATE[order["ordStatus"]]
+                return OrderUpdate(
                     client_order_id=tracked_order.client_order_id,
                     exchange_order_id=str(order["ordId"]),
                     trading_pair=tracked_order.trading_pair,
                     update_timestamp=order["timestamp"] * 1e-3,
                     new_state=new_state,
                 )
-                break
-        if order_update is None:
-            return OrderUpdate(
-                exchange_order_id=tracked_order.exchange_order_id,
-                new_state=CONSTANTS.ORDER_STATE["CANCELED"],
-                trading_pair=tracked_order.trading_pair,
-                client_order_id=tracked_order.client_order_id,
-                update_timestamp=self.current_timestamp,
-            )
-        return order_update
+
+        # Order not found in open orders list - check actual status via orderInfo
+        return await self._get_order_status_from_order_info(tracked_order)
 
     def sort_by_currency(self, x):
         return x["currency"]

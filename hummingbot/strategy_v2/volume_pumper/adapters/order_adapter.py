@@ -300,7 +300,7 @@ class OrderAdapter:
         """
         try:
             if tick_size is None:
-                tick_size = Decimal("0.0001")  # Default fallback
+                tick_size = Decimal("0.00001")  # Default fallback
 
             tolerance = tick_size * tolerance_ticks
 
