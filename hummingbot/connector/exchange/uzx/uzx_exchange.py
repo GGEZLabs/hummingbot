@@ -593,7 +593,7 @@ class UzxExchange(ExchangePyBase):
 
     async def get_volume(self, trading_pair: str) -> Decimal:
         ticker_info = await self._get_ticker_info(trading_pair)
-        return Decimal(ticker_info["vol"])
+        return Decimal(ticker_info["turn_over"])
 
     async def track_all_open_orders(self, market: str):
         """
