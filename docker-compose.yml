@@ -1,7 +1,7 @@
 services:
   hummingbot:
     container_name: hummingbot
-    image: hummingbot/hummingbot:latest
+    image: public.ecr.aws/s2m1f3k2/ggezlabs/hummingbot:2.7.0
     build: # Uncomment this and comment image if you want to build it locally
       context: .
       dockerfile: Dockerfile
@@ -32,6 +32,7 @@ services:
   # gateway:
   #   restart: always
   #   container_name: gateway
+  #   image: public.ecr.aws/s2m1f3k2/ggezlabs/hummingbot-gateway:2.7.0
   #   build: # Uncomment this and comment image if you want to build it locally
   #     context: ../hummingbot-gateway
   #     dockerfile: Dockerfile
