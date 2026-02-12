@@ -660,6 +660,11 @@ class BoundaryService:
 
             # Check if I have orders at this price
             price_key = str(price_dec)
+            number_of_decimals = len(str(self.price_tick_size))
+            # Add zeros to the price key if it is less than the number of decimals
+            if len(price_key) < number_of_decimals:
+                price_key += "0" * (number_of_decimals - len(price_key))
+
             if price_key in my_orders_by_price:
                 my_total_amount = my_orders_by_price[price_key]
                 live_amount = Decimal(str(orderbook_df.at[idx, "amount"]))

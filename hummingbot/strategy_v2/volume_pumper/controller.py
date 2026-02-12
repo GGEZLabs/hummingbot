@@ -135,10 +135,15 @@ class VolumePumperController(ControllerBase):
     @property
     def is_ready_for_architect(self) -> bool:
         """Check if architect can take action."""
-        if self._next_architect_timestamp > self.current_timestamp:
+        if self.current_timestamp < self._next_architect_timestamp:
             return False
         if time.time() - self._last_architect_action_time < 20:
             return False
+        if self._state == StrategyState.ARCHITECT_COOLDOWN:
+            # the cooldown has expired - we can go back to running and removing the conflicting orders
+            self._state = StrategyState.RUNNING
+            self._conflicting_orders = []
+
         return True
 
     @property
@@ -216,13 +221,6 @@ class VolumePumperController(ControllerBase):
 
             case StrategyState.UNDERBALANCED:
                 return False
-
-            case StrategyState.ARCHITECT_COOLDOWN:
-                # Check if cooldown has expired
-                if self.current_timestamp >= self._next_architect_timestamp:
-                    self._state = StrategyState.RUNNING
-                    self._conflicting_orders = []
-                return self._state == StrategyState.RUNNING
 
             case StrategyState.RUNNING:
                 # Check risk
