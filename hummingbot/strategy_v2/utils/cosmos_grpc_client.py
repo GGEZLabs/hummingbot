@@ -79,8 +79,8 @@ class CosmosGrpcClient(IChainClient):
         amount: int,
         denom: str,
         memo: str = "",
-        gas_limit: int = 1000000,
-        fee_amount: int = 1000000,
+        gas_limit: int = 200_000,
+        fee_amount: int = 200_000,
     ) -> str:
 
         # 1. Fetch Account Info

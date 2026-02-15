@@ -70,6 +70,20 @@ class RandomTransactionConfig(BaseClientModel):
             "prompt_on_new": True,
         },
     )
+    gas_limit: int = Field(
+        default=200_000,
+        json_schema_extra={
+            "prompt": "Enter Gas Limit",
+            "prompt_on_new": True,
+        },
+    )
+    fee_amount: int = Field(
+        default=200_000,
+        json_schema_extra={
+            "prompt": "Enter Fee Amount",
+            "prompt_on_new": True,
+        },
+    )
 
     @field_validator("mnemonic_keys_with_addresses", mode="before")
     @classmethod
@@ -135,6 +149,8 @@ class RandomTransaction(ScriptStrategyBase):
                 to_address=address_to,
                 amount=amount,
                 denom=self.config.denom,
+                gas_limit=self.config.gas_limit,
+                fee_amount=self.config.fee_amount
             )
             return data
         except Exception as e:
