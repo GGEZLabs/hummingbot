@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import MetaData, create_engine, inspect
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import Query, Session, sessionmaker
-from sqlalchemy.schema import DropConstraint, ForeignKeyConstraint, Table
+from sqlalchemy.schema import ForeignKeyConstraint, Table
 
 from hummingbot import data_path
 from hummingbot.logger.logger import HummingbotLogger
@@ -87,9 +87,11 @@ class SQLConnectionManager(TransactionBase):
                         if not self._engine.dialect.supports_alter:
                             continue
                         for fkc in fkcs:
-                            fk_constraint = ForeignKeyConstraint((), (), name=fkc)
+                            # In SQLAlchemy 2.0, fkc can be a tuple (constraint_name, referred_table)
+                            fkc_name = fkc[0] if isinstance(fkc, tuple) else fkc
+                            fk_constraint = ForeignKeyConstraint((), (), name=fkc_name)
                             Table(tname, MetaData(), fk_constraint)
-                            conn.execute(DropConstraint(fk_constraint))
+                            # conn.execute(DropConstraint(fk_constraint))
 
         self._session_cls = sessionmaker(bind=self._engine)
 

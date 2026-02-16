@@ -31,6 +31,7 @@ from hummingbot.exceptions import ArgumentParserError
 from hummingbot.logger import HummingbotLogger
 from hummingbot.logger.application_warning import ApplicationWarning
 from hummingbot.model.trade_fill import TradeFill
+from hummingbot.notifier.telegram_notifier import TelegramNotifier
 from hummingbot.remote_iface.mqtt import MQTTGateway
 
 s_logger = None
@@ -86,7 +87,8 @@ class HummingbotApplication(*commands):
         else:
             # In headless mode, we don't initialize UI components
             self.app = None
-            self.parser = None
+            command_tabs = self.init_command_tabs()
+            self.parser: ThrowingArgumentParser = load_parser(self, command_tabs)
 
         # MQTT Bridge (always available in both modes)
         if self.client_config_map.mqtt_bridge.mqtt_autostart:
@@ -257,6 +259,26 @@ class HummingbotApplication(*commands):
 
     def _initialize_notifiers(self):
         """Initialize notifiers by delegating to TradingCore."""
+        telegram_mode = self.client_config_map.telegram_mode
+        if (
+            telegram_mode.telegram_mode_enabled
+            and all(
+                [
+                    telegram_mode.telegram_mode_token,
+                    telegram_mode.telegram_mode_chat_id,
+                ]
+            )
+            and TelegramNotifier not in [type(n) for n in self.notifiers]
+        ):
+            self.notifiers.extend(
+                [
+                    TelegramNotifier(
+                        telegram_mode.telegram_mode_token,
+                        telegram_mode.telegram_mode_chat_id,
+                        self,
+                    )
+                ]
+            )
         for notifier in self.trading_core.notifiers:
             notifier.start()
 

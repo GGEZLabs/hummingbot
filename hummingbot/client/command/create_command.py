@@ -2,11 +2,9 @@ import asyncio
 import copy
 import importlib
 import inspect
-import json
 import os
 import shutil
 import sys
-from collections import OrderedDict
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional
 
@@ -135,7 +133,7 @@ class CreateCommand:
             self.notify(f"An error occurred: {str(e)}")
             self.reset_application_state()
 
-    async def save_config(self, name: str, config_instance: BaseClientModel, config_dir_path: Path):
+    async def save_config(self, name: str, config_instance: ClientConfigAdapter, config_dir_path: Path):
         file_name = await self.prompt_new_file_name(name, True)
         if self.app.to_stop_config:
             self.app.set_text("")
@@ -147,18 +145,8 @@ class CreateCommand:
             self.notify(f"File {file_name} already exists. Please enter a different file name.")
             return await self.save_config(name, config_instance, config_dir_path)  # Recursive call
 
-        config_path = config_dir_path / file_name
-        field_order = list(config_instance.model_fields.keys())
-        config_json_str = config_instance.model_dump_json(warnings=False)
-        config_data = json.loads(config_json_str)
-        ordered_config_data = OrderedDict((field, config_data.get(field)) for field in field_order)
-
-        def _dict_representer(dumper, data):
-            return dumper.represent_dict(data.items())
-
-        OrderedDumper.add_representer(OrderedDict, _dict_representer)
-        with open(config_path, 'w') as file:
-            yaml.dump(ordered_config_data, file, Dumper=OrderedDumper, default_flow_style=False)
+        # Use save_to_yml which handles encryption of SecretStr fields with is_secure=True
+        save_to_yml(config_path, config_instance)
 
         return file_name
 

@@ -107,6 +107,25 @@ class MarketDataCollectionConfigMap(BaseClientModel):
     model_config = ConfigDict(title="market_data_collection")
 
 
+class TelegramModeConfigMap(BaseClientModel):
+    telegram_mode_enabled: bool = Field(
+        default=False,
+        json_schema_extra={
+            "prompt": lambda cm: "Enable Telegram notifier ? (True/False) "
+            "If True, you will need to provide token and chat id"
+        },
+    )
+    telegram_mode_token: str = Field(
+        default="",
+        json_schema_extra={"prompt": lambda cm: "What is your telegram token?"},
+    )
+    telegram_mode_chat_id: str = Field(
+        default="",
+        json_schema_extra={"prompt": lambda cm: "What is your telegram chat id?"},
+    )
+    model_config = ConfigDict(title="telegram_mode")
+
+
 class ColorConfigMap(BaseClientModel):
     top_pane: str = Field(
         default="#000000",
@@ -315,10 +334,18 @@ class DBOtherMode(DBMode):
         default="dbname",
         json_schema_extra={"prompt": lambda cm: "Please enter your DB name"},
     )
+    db_schema: str = Field(
+        default="public",
+        json_schema_extra={"prompt": lambda cm: "Please enter the name of your DB schema"},
+    )
     model_config = ConfigDict(title="other_db_engine")
 
     def get_url(self, db_path: str) -> str:
-        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        if self.db_schema == "public":
+            return (
+                f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"
+            )
+        return f"{self.db_engine}://{self.db_username}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}?options=-csearch_path%3D{self.db_schema}"
 
     @field_validator("db_engine")
     @classmethod
@@ -658,6 +685,21 @@ class DeriveRateSourceMode(ExchangeRateSourceModeBase):
     model_config = ConfigDict(title="derive")
 
 
+class CoinstoreRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="coinstore")
+    model_config = ConfigDict(title="coinstore")
+
+
+class UzxRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="uzx")
+    model_config = ConfigDict(title="uzx")
+
+
+class P2bRateSourceMode(ExchangeRateSourceModeBase):
+    name: str = Field(default="p2b")
+    model_config = ConfigDict(title="p2b")
+
+
 RATE_SOURCE_MODES = {
     AscendExRateSourceMode.model_config["title"]: AscendExRateSourceMode,
     BinanceRateSourceMode.model_config["title"]: BinanceRateSourceMode,
@@ -671,6 +713,9 @@ RATE_SOURCE_MODES = {
     HyperliquidRateSourceMode.model_config["title"]: HyperliquidRateSourceMode,
     DeriveRateSourceMode.model_config["title"]: DeriveRateSourceMode,
     MexcRateSourceMode.model_config["title"]: MexcRateSourceMode,
+    CoinstoreRateSourceMode.model_config["title"]: CoinstoreRateSourceMode,
+    UzxRateSourceMode.model_config["title"]: UzxRateSourceMode,
+    P2bRateSourceMode.model_config["title"]: P2bRateSourceMode,
 }
 
 
@@ -800,6 +845,7 @@ class ClientConfigMap(BaseClientModel):
         )},
     )
     market_data_collection: MarketDataCollectionConfigMap = Field(default=MarketDataCollectionConfigMap())
+    telegram_mode: TelegramModeConfigMap = Field(default=TelegramModeConfigMap())
     model_config = ConfigDict(title="client_config_map")
 
     @field_validator("kill_switch_mode", mode="before")
@@ -849,15 +895,20 @@ class ClientConfigMap(BaseClientModel):
     @field_validator("db_mode", mode="before")
     @classmethod
     def validate_db_mode(cls, v: Union[(str, Dict) + tuple(DB_MODES.values())]):
-        if isinstance(v, tuple(DB_MODES.values()) + (Dict,)):
-            sub_model = v
-        elif v not in DB_MODES:
+        if isinstance(v, tuple(DB_MODES.values())):
+            return v  # Already a valid model instance
+        if isinstance(v, dict):
+            # Route to the correct model based on db_engine value
+            db_engine = v.get("db_engine", "sqlite")
+            if db_engine == "sqlite":
+                return DBSqliteMode(**v)
+            else:
+                return DBOtherMode(**v)
+        if v not in DB_MODES:
             raise ValueError(
                 f"Invalid DB mode, please choose a value from {list(DB_MODES.keys())}."
             )
-        else:
-            sub_model = DB_MODES[v].model_construct()
-        return sub_model
+        return DB_MODES[v].model_construct()
 
     @field_validator("anonymized_metrics_mode", mode="before")
     @classmethod

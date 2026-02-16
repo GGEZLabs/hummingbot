@@ -407,6 +407,9 @@ class TradingCore:
                 # Load config from provided config dict or file
                 config_data = self._load_strategy_config()
                 config = config_class(**config_data)
+                # Decrypt any encrypted SecretStr fields (uses master password from login)
+                config_adapter = ClientConfigAdapter(config)
+                config_adapter.decrypt_all_secure_data()
                 script_class.init_markets(config)
             except StopIteration:
                 raise InvalidScriptModule(f"The module {script_name} does not contain any subclass of BaseClientModel")
@@ -501,7 +504,7 @@ class TradingCore:
             return True
 
         except Exception as e:
-            self.logger().error(f"Failed to start strategy {strategy_name}: {e}")
+            self.logger().error(f"Failed to start strategy {strategy_name}: {e}", exc_info=True)
             return False
 
     async def _initialize_script_strategy(self):

@@ -140,6 +140,8 @@ class MarketsRecorder:
                                     best_bid = market.get_price_by_type(trading_pair, PriceType.BestBid)
                                     best_ask = market.get_price_by_type(trading_pair, PriceType.BestAsk)
                                     order_book = market.get_order_book(trading_pair)
+                                    balance = market.get_all_balances()
+                                    balance_serializable = {k: round(float(v), 2) for k, v in balance.items()}
                                     depth = self._market_data_collection_config.market_data_collection_depth + 1
                                     market_data = MarketData(
                                         timestamp=self.db_timestamp,
@@ -150,7 +152,9 @@ class MarketsRecorder:
                                         best_ask=best_ask,
                                         order_book={
                                             "bid": list(order_book.bid_entries())[:depth],
-                                            "ask": list(order_book.ask_entries())[:depth]}
+                                            "ask": list(order_book.ask_entries())[:depth],
+                                        },
+                                        balance=balance_serializable,
                                     )
                                     session.add(market_data)
             except asyncio.CancelledError:

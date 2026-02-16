@@ -19,6 +19,7 @@ class MarketData(HummingbotBase):
     best_bid = Column(SqliteDecimal(6), nullable=False)
     best_ask = Column(SqliteDecimal(6), nullable=False)
     order_book = Column(JSON)
+    balance = Column(JSON)
 
     def __repr__(self) -> str:
         list_of_fields = [f"{name}: {value}" for name, value in inspect.getmembers(self) if isinstance(value, Column)]
