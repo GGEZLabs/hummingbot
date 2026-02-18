@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Hummingbot Quickstart Debug",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceRoot}/bin/hummingbot_quickstart.py",
+      "console": "integratedTerminal",
+      "python": "${command:python.interpreterPath}",
+      "args": [
+        // "--headless",
+        // "-p",
+        // "a"
+        // "-f", "volume_monitor.py",
+        // "-c", "conf_volume_monitor_1.yml"
+      ]
+    }
+  ]
+}
