@@ -127,15 +127,40 @@ User trading scripts go in `scripts/`. These are Python files that define tradin
 
 ## Documentation
 
-The `docs/` folder contains detailed guides for this project. When a user asks about any of the topics below, **always read the relevant file(s) first** before answering:
+The `docs/` folder contains all project documentation. When a user asks about any of the topics below, **always read the relevant file(s) first** before answering. Treat these files as the authoritative source of truth, taking precedence over general knowledge.
+
+### Operational Docs
 
 | Topic | File |
 |-------|------|
-| Creating or developing a new exchange connector | `docs/CONNECTOR_DEVELOPMENT_GUIDE.md` |
-| Creating or developing a new strategy (v1 or v2) | `docs/STRATEGY_DEVELOPMENT_GUIDE.md` |
-| Volume pumper controller, volume trading logic | `docs/VOLUME_PUMPER_CONTROLLER_GUIDE.md` |
+| Repository overview, component list | `docs/repository-overview.md` |
+| Server instances (local, iWeb, AWS) | `docs/hbot-instance.md` |
+| Installation and running (source, Docker, debug) | `docs/hbot-installation-running.md` |
+| AWS ECR image push/pull | `docs/aws-ecr.md` |
+| Hummingbot configuration (conf_client.yml) | `docs/hbot-configuration.md` |
+| Running strategies via CLI or Dashboard | `docs/running-strategies.md` |
+| Running multiple bot instances | `docs/running-multiple-instances.md` |
+| Important links (exchanges, APIs, resources) | `docs/important-links.md` |
+| CLI clipboard copy/paste | `docs/cli-clipboard-operations.md` |
+| Exchange constraints and troubleshooting | `docs/general-notes-troubleshooting.md` |
+| Dev-to-production deployment workflow | `docs/development-deployment-workflow.md` |
+| Linux memory management and Docker limits | `docs/memory-management.md` |
+| Docker and conda command reference | `docs/useful-command-reference.md` |
+| Developing a strategy (overview) | `docs/developing-a-strategy.md` |
+| Database connections and Hasura GraphQL | `docs/database-hasura.md` |
+| Environment variables | `docs/environment-variables.md` |
+| Volume pumper controller parameters and live config | `docs/volume-pumper-controller.md` |
+| Telegram bot tokens and chat IDs | `docs/telegram-tokens.md` |
 
-If a question could relate to multiple guides, read all relevant ones. Treat these files as the authoritative source of truth for their respective topics, taking precedence over general knowledge.
+### Technical Guides
+
+| Topic | File |
+|-------|------|
+| Creating or developing a new exchange connector | `docs/connector-development-guide.md` |
+| Creating or developing a new strategy (v1 or v2) | `docs/strategy-development-guide.md` |
+| Volume pumper controller, volume trading logic | `docs/volume-pumper-controller-guide.md` |
+
+If a question could relate to multiple files, read all relevant ones.
 
 ## Git Workflow
 
