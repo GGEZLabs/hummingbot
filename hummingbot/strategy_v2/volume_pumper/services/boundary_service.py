@@ -618,6 +618,10 @@ class BoundaryService:
         amounts_by_price = defaultdict(Decimal)
         for order in orders:
             price_key = str(Decimal(str(order.price)))
+            number_of_decimals = len(str(self.price_tick_size))
+            # Add zeros to the price key if it is less than the number of decimals
+            if len(price_key) < number_of_decimals:
+                price_key += "0" * (number_of_decimals - len(price_key))
             amounts_by_price[price_key] += Decimal(str(order.amount))
         return dict(amounts_by_price)
 
