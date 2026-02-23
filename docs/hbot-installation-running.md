@@ -139,7 +139,7 @@ Run the following command to launch Hummingbot:
 
             *"console": "integratedTerminal",*
 
-            *"python": \<path\_to\_conda\_environment\>* *,*
+            *"python": "${command:python.interpreterPath}",*
 
             *"args": \[*
 
@@ -161,19 +161,13 @@ Run the following command to launch Hummingbot:
 
       *}*
 
-2. Set the Python environment path
-   1. Open a terminal and activate the Hummingbot conda environment:
+2. Select the correct Python interpreter
+   1. In **VSCode**, open the Command Palette (**Ctrl+Shift+P**).
+   2. Search for **"Python: Select Interpreter"**.
+   3. Select the **hummingbot** conda environment interpreter.
 
-   *conda activate hummingbot*
-
-   2. Get the Python executable path:
-      *which python*
-
-   3. Copy the output path and replace *\<path\_to\_conda\_environment\>* in the launch.json file with it.
 3. Run Hummingbot in debug mode
-   1. In **VSCode**, go to the Run & Debug tab.
-   2. Select the configuration named "**Hummingbot Application**".
-   3. Press **F5** (or click Run).
+   1. Press **F5** (or click Run).
 
 Hummingbot will now launch in debug mode with breakpoints enabled.
 
@@ -320,7 +314,7 @@ In the same folder, do the following commands
 
 * Installing dependencies
 
-  *./install*
+  *make install*
 
   *conda activate dashboard*
 
@@ -329,10 +323,18 @@ In the same folder, do the following commands
   *pip install \<path to hummingbot-api-client source code\>*
 
 
-* Run the following command to launch Hummingbot:
+* Run the following command to launch the Dashboard:
 
   *make run*
 
+* Run the Dashboard in debug mode (VSCode)
+
+  The launch.json file is already included in the dashboard repository.
+
+   1. In **VSCode**, open the Command Palette (**Ctrl+Shift+P**).
+   2. Search for **"Python: Select Interpreter"**.
+   3. Select the **dashboard** conda environment interpreter.
+   4. Press **F5** (or click Run).
 
 2. launching Hummingbot Backend API
 
@@ -344,15 +346,24 @@ In the same folder, do the following commands
 
 * Installing dependencies
 
-  *./install*
+  *make install*
 
   *conda activate hummingbot-api*
 
   *pip install \<path to humminbot 2.7 source code\>*
 
-* Run the following command to launch Hummingbot:
+* Run the following command to launch the Backend API:
 
   *make run*
+
+* Run the Backend API in debug mode (VSCode)
+
+  The launch.json file is already included in the backend API repository.
+
+   1. In **VSCode**, open the Command Palette (**Ctrl+Shift+P**).
+   2. Search for **"Python: Select Interpreter"**.
+   3. Select the **hummingbot-api** conda environment interpreter.
+   4. Press **F5** (or click Run).
 
 
 # Launch Hummingbot Dashboard (Docker)
