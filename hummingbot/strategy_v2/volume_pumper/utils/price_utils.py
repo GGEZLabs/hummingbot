@@ -280,6 +280,41 @@ def calculate_price_change_percent(
         raise
 
 
+def normalize_price_key(price: Numeric, tick_size: Numeric) -> str:
+    """
+    Convert a price to a normalized string key for consistent dict lookups.
+
+    Ensures that prices from different sources (order book floats, Decimal
+    order prices) produce identical keys by:
+    1. Converting to Decimal via string (avoids float precision issues)
+    2. Padding with trailing zeros to match the tick size precision
+
+    Args:
+        price: The price value (can be float, Decimal, int)
+        tick_size: The price tick size (determines required precision)
+
+    Returns:
+        Normalized price string suitable for use as a dict key
+
+    Examples:
+        >>> normalize_price_key(0.5, Decimal("0.0001"))
+        '0.5000'
+        >>> normalize_price_key(Decimal("0.50"), Decimal("0.0001"))
+        '0.5000'
+        >>> normalize_price_key(100, Decimal("0.0001"))
+        '100.0000'
+    """
+    try:
+        price_dec = Decimal(str(price))
+        tick_dec = Decimal(str(tick_size))
+        return str(price_dec.quantize(tick_dec))
+    except Exception as e:
+        logger.error(
+            f"Error in normalize_price_key(price={price}, tick_size={tick_size}): {type(e).__name__}: {e}"
+        )
+        raise
+
+
 def compare_numbers(num1: Numeric, operator: str, num2: Numeric) -> bool:
     """
     Safely compare two numbers that may be floats or Decimals.

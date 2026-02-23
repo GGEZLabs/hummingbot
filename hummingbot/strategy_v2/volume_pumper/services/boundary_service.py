@@ -25,6 +25,7 @@ from hummingbot.strategy_v2.volume_pumper.utils.price_utils import (
     calculate_spread_percent,
     clamp_price,
     compare_numbers,
+    normalize_price_key,
     round_to_tick_size,
 )
 
@@ -383,12 +384,12 @@ class BoundaryService:
             # Group orders by price (handling float prices via string conversion)
             orders_by_price = defaultdict(list)
             for order in current_orders.values():
-                price_key = str(Decimal(str(order.price)))
+                price_key = normalize_price_key(order.price, self.price_tick_size)
                 orders_by_price[price_key].append(order)
 
             # Check each creation candidate
             for order_candidate in deepcopy(action_plan.creations_candidates):
-                candidate_price_key = str(Decimal(str(order_candidate.price)))
+                candidate_price_key = normalize_price_key(order_candidate.price, self.price_tick_size)
 
                 # Get all my orders at this price
                 my_orders_at_price = orders_by_price.get(candidate_price_key, [])
@@ -617,11 +618,7 @@ class BoundaryService:
         """
         amounts_by_price = defaultdict(Decimal)
         for order in orders:
-            price_key = str(Decimal(str(order.price)))
-            number_of_decimals = len(str(self.price_tick_size))
-            # Add zeros to the price key if it is less than the number of decimals
-            if len(price_key) < number_of_decimals:
-                price_key += "0" * (number_of_decimals - len(price_key))
+            price_key = normalize_price_key(order.price, self.price_tick_size)
             amounts_by_price[price_key] += Decimal(str(order.amount))
         return dict(amounts_by_price)
 
@@ -663,11 +660,7 @@ class BoundaryService:
                     continue
 
             # Check if I have orders at this price
-            price_key = str(price_dec)
-            number_of_decimals = len(str(self.price_tick_size))
-            # Add zeros to the price key if it is less than the number of decimals
-            if len(price_key) < number_of_decimals:
-                price_key += "0" * (number_of_decimals - len(price_key))
+            price_key = normalize_price_key(price_dec, self.price_tick_size)
 
             if price_key in my_orders_by_price:
                 my_total_amount = my_orders_by_price[price_key]
