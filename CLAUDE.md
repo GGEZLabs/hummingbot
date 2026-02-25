@@ -162,6 +162,14 @@ The `docs/` folder contains all project documentation. When a user asks about an
 
 If a question could relate to multiple files, read all relevant ones.
 
+### Mandatory Reading Rules
+
+Before answering any question about the volume pumper strategy — including config calculations, parameter tuning, market config JSON, architect/boundary/drift logic, or phase settings — **you MUST read both**:
+1. `docs/volume-pumper-controller.md` (parameters and live config)
+2. `docs/volume-pumper-controller-guide.md` (technical guide with formulas and architecture)
+
+Also check the actual source code in `hummingbot/strategy_v2/volume_pumper/` (especially `services/architect_service.py` and `utils/math_utils.py`) to verify any formulas before doing calculations.
+
 ## Git Workflow
 
 - Branch from `development` (not `master`)
